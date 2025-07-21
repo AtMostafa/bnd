@@ -889,7 +889,7 @@ class ParsedNWBFile:
 
 
 def run_pyaldata_conversion(
-    session_path: Path, kilosort_flag: bool, custom_map: bool
+    session_path: Path, kilosort_flag: bool, custom_map: bool, lfp: bool
 ) -> None:
     """
     Main pyaldata conversion routine. Creates pyaldata file for a specific session. It will
@@ -916,7 +916,7 @@ def run_pyaldata_conversion(
     nwbfile_path = config.get_subdirectories_from_pattern(session_path, "*.nwb")
     if not nwbfile_path:
         logger.warning(f"NWB file: {session_path.name}.nwb not found")
-        run_nwb_conversion(session_path, kilosort_flag, custom_map)  # Creates .nwb file
+        run_nwb_conversion(session_path, kilosort_flag, custom_map, lfp)  # Creates .nwb file
         nwbfile_path = session_path / f"{session_path.name}.nwb"
 
     elif len(nwbfile_path) > 1:
