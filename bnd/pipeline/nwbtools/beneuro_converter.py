@@ -117,6 +117,9 @@ class BeNeuroConverter(NWBConverter):
                 spikeglx_output_folder_path = spikeglx_output_folder_path[
                     self.recording_to_process
                 ]
+                assert f"g{self.recording_to_process}" in str(spikeglx_output_folder_path), \
+                    f"double check file paths: {spikeglx_output_folder_path=}"
+
             elif len(spikeglx_output_folder_path) == 1:
                 spikeglx_output_folder_path = spikeglx_output_folder_path[0]
 

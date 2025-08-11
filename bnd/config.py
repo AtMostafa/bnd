@@ -136,7 +136,7 @@ class Config:
     def get_subdirectories_from_pattern(directory: Path, subdir_pattern: str):
         subdirectory_paths = list(directory.glob(subdir_pattern))
 
-        return subdirectory_paths
+        return sorted(subdirectory_paths)
 
 
 def _load_config() -> Config:
