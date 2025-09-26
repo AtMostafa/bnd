@@ -3,6 +3,7 @@ Module for conversion from nwb to pyaldata format
 """
 
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -115,6 +116,39 @@ def _bin_spikes(probe_units: Units, bin_size: float) -> np.array:
     return binned_spikes
 
 
+def _get_brain_areas_and_chan_map(
+    pynwbobj: Units | ElectricalSeries, electrode_info: DynamicTable
+) -> Tuple[dict, dict, bool]:
+    """
+    Returns brain areas from custom map file together with chan_map and pinpoint flag
+
+    Parameters
+    ----------
+    pynwbobj : Units | ElectricalSeries
+        Object of pynwb
+    electrode_info : DynamicTable
+        Electrode information
+
+    Returns
+    -------
+    Tuple[dict, dict, bool]
+        _description_
+    """
+    electrode_info_df = electrode_info.to_dataframe()
+    probe_electrode_locations_df = electrode_info_df[
+        electrode_info_df["group_name"] == pynwbobj.name.split("_")[-1]
+    ]
+    chan_map = probe_electrode_locations_df["location"].to_dict()
+
+    no_pinpoint_flag = all(value == "nan" for value in chan_map.values())
+
+    if no_pinpoint_flag:
+        brain_areas = {f"all_{pynwbobj.name.split('_')[-1]}"}
+    else:
+        brain_areas = {value for value in chan_map.values() if value not in ["out", "void"]}
+    return brain_areas, chan_map, no_pinpoint_flag
+
+
 def _transform_chan_best_to_unit_guide(arr: np.array) -> np.array:
     # Find unique values and their counts
     unique_values, counts = np.unique(arr, return_counts=True)
@@ -168,29 +202,35 @@ def _parse_pynwb_probe(
     chan_best = (templates**2).sum(axis=1).argmax(axis=-1)
 
     # Get brain area channel map for this specific probe
-    electrode_info_df = electrode_info.to_dataframe()
-    probe_electrode_locations_df = electrode_info_df[
-        electrode_info_df["group_name"] == probe_units.name.split("_")[-1]
-    ]
-    probe_channel_map = probe_electrode_locations_df["location"].to_dict()
+    # electrode_info_df = electrode_info.to_dataframe()
+    # probe_electrode_locations_df = electrode_info_df[
+    #     electrode_info_df["group_name"] == probe_units.name.split("_")[-1]
+    # ]
+    # probe_channel_map = probe_electrode_locations_df["location"].to_dict()
 
-    no_pinpoint_channel_map = all(value == "nan" for value in probe_channel_map.values())
+    # no_pinpoint_channel_map = all(value == "nan" for value in probe_channel_map.values())
+
+    # brain_area_spikes_and_chan_best = {}
+
+    # if no_pinpoint_channel_map:
+    #     brain_areas = {f"all_{probe_units.name.split('_')[-1]}"}
+    # else:
+    #     brain_areas = {
+    #         value for value in probe_channel_map.values() if value not in ["out", "void"]
+    #     }
+
+    brain_areas, chan_map, no_pinpoint_flag = _get_brain_areas_and_chan_map(
+        pynwbobj=probe_units, electrode_info=electrode_info
+    )
 
     brain_area_spikes_and_chan_best = {}
 
-    if no_pinpoint_channel_map:
-        brain_areas = {f"all_{probe_units.name.split('_')[-1]}"}
-    else:
-        brain_areas = {
-            value for value in probe_channel_map.values() if value not in ["out", "void"]
-        }
-
     for brain_area in brain_areas:
-        if no_pinpoint_channel_map:  # Take all channels if there is no channel map
-            brain_area_channels = [key for key, value in probe_channel_map.items()]
+        if no_pinpoint_flag:  # Take all channels if there is no channel map
+            brain_area_channels = [key for key, value in chan_map.items()]
         else:
             brain_area_channels = [
-                key for key, value in probe_channel_map.items() if value == brain_area
+                key for key, value in chan_map.items() if value == brain_area
             ]
 
         brain_area_neurons = np.where(np.isin(chan_best, brain_area_channels))[0]
@@ -225,36 +265,39 @@ def _parse_pynwb_probe(
 def _parse_pynwb_electrical_series(
     elec_series: ElectricalSeries, electrode_info: DynamicTable
 ) -> dict:
+    """Parse pynwb electrical series and return lfp data per brain area
 
-    # Get brain area channel map for this specific probe
-    electrode_info_df = electrode_info.to_dataframe()
-    probe_electrode_locations_df = electrode_info_df[
-        electrode_info_df["group_name"] == elec_series.name.split("_")[-1]
-    ]
-    probe_channel_map = probe_electrode_locations_df["location"].to_dict()
+    Parameters
+    ----------
+    elec_series : ElectricalSeries
+        pynwb object
+    electrode_info : DynamicTable
+        electrode information
 
-    no_pinpoint_channel_map = all(value == "nan" for value in probe_channel_map.values())
+    Returns
+    -------
+    dict
+        contains lfp data, timestamps, and conversion constant
+    """
 
-    brain_area_spikes_and_chan_best = {}
-
-    if no_pinpoint_channel_map:
-        brain_areas = {f"all_{elec_series.name.split('_')[-1]}"}
-    else:
-        brain_areas = {
-            value for value in probe_channel_map.values() if value not in ["out", "void"]
-        }
-
-    for brain_area in brain_areas:
-        if no_pinpoint_channel_map:  # Take all channels if there is no channel map
-            brain_area_channels = [key for key, value in probe_channel_map.items()]
-        else:
-            brain_area_channels = [
-                key for key, value in probe_channel_map.items() if value == brain_area
-            ]
-
-        breakpoint()
+    brain_areas, chan_map, no_pinpoint_flag = _get_brain_areas_and_chan_map(
+        pynwbobj=elec_series, electrode_info=electrode_info
+    )
 
     brain_area_lfp_chan_data = {}
+    brain_area_lfp_chan_data["timestamps"] = elec_series.get_timestamps()
+    brain_area_lfp_chan_data["conversion"] = elec_series.conversion
+    for brain_area in brain_areas:
+        if no_pinpoint_flag:  # Take all channels if there is no channel map
+            brain_area_channels = [key for key, value in chan_map.items()]
+        else:
+            brain_area_channels = [
+                key for key, value in chan_map.items() if value == brain_area
+            ]
+
+        brain_area_lfp_chan_data[f'{brain_area.replace("-", "_")}_lfp'] = elec_series.data[
+            :, brain_area_channels
+        ]
 
     return brain_area_lfp_chan_data
 
@@ -432,11 +475,11 @@ class ParsedNWBFile:
                     self.try_parsing_anipose_output()
 
                 elif processing_key == "ecephys":
-                    #  If there is a ephys processing module we assume there is spiking data
-                    self.parse_spike_data()
-
                     # If there is LFP data in the nwb it will parse it
                     self.parse_spikeglx_lfp_data()
+
+                    #  If there is a ephys processing module we assume there is spiking data
+                    self.parse_spike_data()
 
             else:
                 logger.warning(
@@ -600,13 +643,16 @@ class ParsedNWBFile:
             logger.info("No SpikeGLX LFP data found in nwb file")
             self.spikeglx_lfp = None
             return
-
+        
+        logger.info(f"Parsing lfp data. Found probes {self.ecephys["LFP"].electrical_series.keys()}")
         spikeglx_data_dict = {}
         for probe_lfp, electrical_series in self.ecephys["LFP"].electrical_series.items():
             spikeglx_data_dict[probe_lfp] = _parse_pynwb_electrical_series(
                 elec_series=electrical_series,
                 electrode_info=self.nwbfile.electrodes,
             )
+
+        breakpoint()
         return
 
     def add_pycontrol_states_to_df(self) -> None:
@@ -638,7 +684,14 @@ class ParsedNWBFile:
 
         return
 
-    def add_pycontrol_events_to_df(self):
+    def add_pycontrol_events_to_df(self) -> None:
+        """
+        Adds pycontrol events to session backbone dataframe
+
+        Returns
+        -------
+
+        """
         unique_events = self.pycontrol_events["event"].unique()
         for unique_event in unique_events:
             self.pyaldata_df[f"values_{unique_event}"] = np.nan
@@ -664,7 +717,14 @@ class ParsedNWBFile:
 
         return
 
-    def add_motion_sensor_data_to_df(self):
+    def add_motion_sensor_data_to_df(self) -> None:
+        """
+        Add motion sensor data to session backbone dataframe
+
+        Returns
+        -------
+
+        """
 
         if hasattr(self, "pycontrol_motion_sensors"):
             for mot_sens_key, mot_sens in self.pycontrol_motion_sensors.items():
@@ -688,8 +748,15 @@ class ParsedNWBFile:
 
         return
 
-    def add_anipose_data_to_df(self):
-        # TODO
+    def add_anipose_data_to_df(self) -> None:
+        """
+        Adds anipose to session backbone dataframe
+
+        Returns
+        -------
+
+        """
+
         if hasattr(self, "anipose_data"):
             for anipose_key, anipose_value in self.anipose_data.items():
                 # Bin timestamps
