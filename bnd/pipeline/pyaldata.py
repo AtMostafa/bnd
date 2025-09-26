@@ -10,7 +10,10 @@ import scipy
 from ndx_pose import PoseEstimationSeries
 from pynwb import NWBHDF5IO
 from pynwb.behavior import SpatialSeries
+from pynwb.ecephys import ElectricalSeries
 from pynwb.misc import Units
+
+from hdmf.common.table import DynamicTable
 
 from ..config import _load_config
 from ..logger import set_logging
@@ -219,15 +222,41 @@ def _parse_pynwb_probe(
     return brain_area_spikes_and_chan_best
 
 
-def _parse_pynwb_electrical_series(probe_name: str, electrode_info) -> dict:
+def _parse_pynwb_electrical_series(
+    elec_series: ElectricalSeries, electrode_info: DynamicTable
+) -> dict:
 
+    # Get brain area channel map for this specific probe
     electrode_info_df = electrode_info.to_dataframe()
-
     probe_electrode_locations_df = electrode_info_df[
-        electrode_info_df["group_name"] == probe_units.name.split("_")[-1]
+        electrode_info_df["group_name"] == elec_series.name.split("_")[-1]
     ]
+    probe_channel_map = probe_electrode_locations_df["location"].to_dict()
 
-    return
+    no_pinpoint_channel_map = all(value == "nan" for value in probe_channel_map.values())
+
+    brain_area_spikes_and_chan_best = {}
+
+    if no_pinpoint_channel_map:
+        brain_areas = {f"all_{elec_series.name.split('_')[-1]}"}
+    else:
+        brain_areas = {
+            value for value in probe_channel_map.values() if value not in ["out", "void"]
+        }
+
+    for brain_area in brain_areas:
+        if no_pinpoint_channel_map:  # Take all channels if there is no channel map
+            brain_area_channels = [key for key, value in probe_channel_map.items()]
+        else:
+            brain_area_channels = [
+                key for key, value in probe_channel_map.items() if value == brain_area
+            ]
+
+        breakpoint()
+
+    brain_area_lfp_chan_data = {}
+
+    return brain_area_lfp_chan_data
 
 
 def _parse_pose_estimation_series(
@@ -403,10 +432,10 @@ class ParsedNWBFile:
                     self.try_parsing_anipose_output()
 
                 elif processing_key == "ecephys":
-                    # If there is a ephys processing module we assume there is spiking data
+                    #  If there is a ephys processing module we assume there is spiking data
                     self.parse_spike_data()
 
-                    # Try to parse lfps
+                    # If there is LFP data in the nwb it will parse it
                     self.parse_spikeglx_lfp_data()
 
             else:
@@ -535,7 +564,7 @@ class ParsedNWBFile:
 
         return
 
-    def parse_spike_data(self):
+    def parse_spike_data(self) -> None:
         """
         Parse spiking data from each probe and assign a dictionary of spikes, chan_best, and
         kilosort labels ('good' or 'mua')
@@ -558,8 +587,14 @@ class ParsedNWBFile:
         self.spike_data = spike_data_dict
         return
 
-    def parse_spikeglx_lfp_data(self):
-        breakpoint()
+    def parse_spikeglx_lfp_data(self) -> None:
+        """
+        Parse spike glx lfp data and creat dictionary
+
+        Returns
+        -------
+
+        """
 
         if "LFP" not in self.ecephys.keys():
             logger.info("No SpikeGLX LFP data found in nwb file")
@@ -567,17 +602,21 @@ class ParsedNWBFile:
             return
 
         spikeglx_data_dict = {}
-        for probe_lfp in self.ecephys["LFP"].electrical_series.keys():
+        for probe_lfp, electrical_series in self.ecephys["LFP"].electrical_series.items():
             spikeglx_data_dict[probe_lfp] = _parse_pynwb_electrical_series(
-                probe_name=probe_lfp, electrode_info=self.nwbfile.electrodes
+                elec_series=electrical_series,
+                electrode_info=self.nwbfile.electrodes,
             )
         return
 
-    def add_pycontrol_states_to_df(self):
-        # TODO: Fix time units
-        start_time = 0.0
-        end_time = self.pycontrol_states.stop_time.values[-1] / 1000  # To seconds
+    def add_pycontrol_states_to_df(self) -> None:
+        """
+        Adds pycontrol states to session backbone dataframe
 
+        Returns
+        -------
+
+        """
         self.pyaldata_df["trial_id"] = self.pycontrol_states.start_time.index
         self.pyaldata_df["bin_size"] = self.bin_size
 
@@ -698,9 +737,7 @@ class ParsedNWBFile:
 
                     self.pyaldata_df[f"{brain_area_key}_spikes"] = np.nan
                     tmp_df = pd.DataFrame(brain_area_spike_data["spikes"].T)  # Transpose
-                    tmp_df["timestamp_idx"] = (
-                        tmp_df.index
-                    )  # Add timestamp for the following function
+                    tmp_df["timestamp_idx"] = tmp_df.index
 
                     # Add data
                     self.pyaldata_df = _add_data_to_trial(
