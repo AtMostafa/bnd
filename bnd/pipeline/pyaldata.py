@@ -285,7 +285,7 @@ def _parse_pynwb_electrical_series(
     )
 
     brain_area_lfp_chan_data = {}
-    brain_area_lfp_chan_data["timestamps"] = elec_series.get_timestamps()
+    brain_area_lfp_chan_data["sfreq"] = 500.0
     brain_area_lfp_chan_data["conversion"] = elec_series.conversion
     for brain_area in brain_areas:
         if no_pinpoint_flag:  # Take all channels if there is no channel map
@@ -295,9 +295,13 @@ def _parse_pynwb_electrical_series(
                 key for key, value in chan_map.items() if value == brain_area
             ]
 
-        brain_area_lfp_chan_data[f'{brain_area.replace("-", "_")}_lfp'] = elec_series.data[
-            :, brain_area_channels
-        ]
+        # Remove negative time
+        time_zero = np.argwhere(elec_series.get_timestamps() > 0)[0][0]
+        brain_area_lfp_chan_data[f'{brain_area.replace("-", "_")}_lfp'] = (
+            scipy.signal.decimate(
+                elec_series.data[time_zero:, brain_area_channels], q=5, axis=0
+            )
+        )
 
     return brain_area_lfp_chan_data
 
@@ -404,7 +408,7 @@ def _add_data_to_trial(
     for index, row in df_to_add_to.iterrows():
         trial_specific_events = df_to_add_from[
             (df_to_add_from["timestamp_idx"] >= row["idx_trial_start"])
-            & (df_to_add_from["timestamp_idx"] <= row["idx_trial_end"])
+            & (df_to_add_from["timestamp_idx"] < row["idx_trial_end"] + 1)
         ]
 
         # Add to pyaldata dataframe
@@ -643,16 +647,16 @@ class ParsedNWBFile:
             logger.info("No SpikeGLX LFP data found in nwb file")
             self.spikeglx_lfp = None
             return
-        
-        logger.info(f"Parsing lfp data. Found probes {self.ecephys["LFP"].electrical_series.keys()}")
-        spikeglx_data_dict = {}
+
+        lfp_keys = [key for key in self.ecephys["LFP"].electrical_series.keys()]
+        logger.info(f"Parsing lfp data. Found probes {lfp_keys}")
+        spikeglx_lfp_data_dict = {}
         for probe_lfp, electrical_series in self.ecephys["LFP"].electrical_series.items():
-            spikeglx_data_dict[probe_lfp] = _parse_pynwb_electrical_series(
+            spikeglx_lfp_data_dict[probe_lfp] = _parse_pynwb_electrical_series(
                 elec_series=electrical_series,
                 electrode_info=self.nwbfile.electrodes,
             )
-
-        breakpoint()
+        self.spikeglx_lfp_data = spikeglx_lfp_data_dict
         return
 
     def add_pycontrol_states_to_df(self) -> None:
@@ -782,6 +786,13 @@ class ParsedNWBFile:
         return
 
     def add_spiking_data_to_df(self):
+        """
+        Add spiking data to dataframe
+
+        Returns
+        -------
+
+        """
         if hasattr(self, "spike_data"):
             for probe_key in self.spike_data.keys():
                 for brain_area_key, brain_area_spike_data in self.spike_data[
@@ -816,6 +827,41 @@ class ParsedNWBFile:
                         ],
                         timestamp_column=None,
                     )
+        return
+
+    def add_lfp_data_to_df(self) -> None:
+        if hasattr(self, "spikeglx_lfp_data"):
+            for probe_key in self.spikeglx_lfp_data.keys():
+                # Add sampling frequency
+                self.pyaldata_df[f"{probe_key}_lfp_sfreq"] = self.spikeglx_lfp_data[
+                    probe_key
+                ]["sfreq"]
+
+                # Add sampling frequency
+                self.pyaldata_df[f"{probe_key}_lfp_conversion"] = self.spikeglx_lfp_data[
+                    probe_key
+                ]["conversion"]
+
+                for key, value in self.spikeglx_lfp_data[probe_key].items():
+                    # Check if key has format brain_area_lfp
+                    if key not in ["sfreq", "conversion"]:
+                        self.pyaldata_df[key] = np.nan
+                        tmp_df = pd.DataFrame(value)
+                        tmp_df["timestamp_idx"] = tmp_df.index / (
+                            self.spikeglx_lfp_data[probe_key]["sfreq"] * self.bin_size
+                        )
+
+                        # Add to dataframe
+                        self.pyaldata_df = _add_data_to_trial(
+                            df_to_add_to=self.pyaldata_df,
+                            new_data_column=key,
+                            df_to_add_from=tmp_df,
+                            columns_to_read_from=[
+                                col for col in tmp_df.columns if col != "timestamp_idx"
+                            ],
+                            timestamp_column=None,
+                        )
+
         return
 
     def add_mouse_and_session(self):
@@ -926,6 +972,7 @@ class ParsedNWBFile:
 
         # Add ecephys data
         self.add_spiking_data_to_df()
+        self.add_lfp_data_to_df()
 
         # Add general information
         self.add_mouse_and_session()
