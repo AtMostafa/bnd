@@ -299,7 +299,7 @@ def _parse_pynwb_electrical_series(
         time_zero = np.argwhere(elec_series.get_timestamps() > 0)[0][0]
         brain_area_lfp_chan_data[f'{brain_area.replace("-", "_")}_lfp'] = (
             scipy.signal.decimate(
-                elec_series.data[time_zero:, brain_area_channels], q=5, axis=0
+                elec_series.data[time_zero:, brain_area_channels], q=2, axis=0
             )
         )
 
