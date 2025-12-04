@@ -2,8 +2,11 @@
 Module for conversion from nwb to pyaldata format
 """
 
+import os
 from pathlib import Path
 from typing import Tuple
+import hdf5storage
+import glob
 
 import numpy as np
 import pandas as pd
@@ -285,7 +288,7 @@ def _parse_pynwb_electrical_series(
     )
 
     brain_area_lfp_chan_data = {}
-    brain_area_lfp_chan_data["sfreq"] = 500.0
+    brain_area_lfp_chan_data["sfreq"] = 1250
     brain_area_lfp_chan_data["conversion"] = elec_series.conversion
     for brain_area in brain_areas:
         if no_pinpoint_flag:  # Take all channels if there is no channel map
@@ -428,6 +431,7 @@ def _add_data_to_trial(
 
 class ParsedNWBFile:
     def __init__(self, nwbfile_path: Path):
+        self.save_as_hdf = True
         with NWBHDF5IO(nwbfile_path, mode="r") as io:
             # General
             self.bin_size = 0.01
@@ -990,6 +994,25 @@ class ParsedNWBFile:
 
         return
 
+    def _save_as_hdf(self):
+        logger.info("Saving as zipped pickle file...")
+        path_to_save = (
+            self.nwbfile_path.parent / f"{self.nwbfile_path.parent.name}_pyaldata.pkl.gz"
+        )
+
+        ## Saving as pkl
+        self.pyaldata_df.to_pickle(path_to_save, compression="gzip")
+
+        # hdf5storage.savemat(
+        #     path_to_save,
+        #     {"pyaldata": self.pyaldata_df.to_dict("list")},
+        #     format="7.3",
+        #     oned_as="column",
+        #     store_python_metadata=True,
+        # )
+
+        return
+
     def _partition_and_save_to_mat(self):
         """
         Checks if data_array needs to be partitioned wrt. max matlab 5 file format and saves it
@@ -1003,39 +1026,47 @@ class ParsedNWBFile:
 
         assert num_partitions >= 1 and num_partitions < len(data_array)  # General checks
 
-        # If size doesnt exceed, save the array
-        if num_partitions == 1:
-            # No need to split the data array
-            logger.info("Saving file...")
-            path_to_save = (
-                self.nwbfile_path.parent / f"{self.nwbfile_path.parent.name}_pyaldata.mat"
-            )
-            scipy.io.savemat(path_to_save, {"pyaldata": data_array})
+        if self.save_as_hdf:
+            self._save_as_hdf()
             return
+
         else:
-            # Partition array
-            logger.info(f"Session ({nbytes / 2**30:.2f} GB) exceeds matlab 5 format (2 GB) ")
 
-            logger.info(f"Partitioning array into {num_partitions} chunks...")
-            partition_sizes = [
-                (recarray_size // num_partitions)
-                + (1 if i < (recarray_size % num_partitions) else 0)
-                for i in range(num_partitions)
-            ]
-
-            # Split the recarray accordingly
-            indices = np.cumsum([0] + partition_sizes)
-            arr_partitions = [
-                data_array[indices[i] : indices[i + 1]] for i in range(num_partitions)
-            ]
-
-            logger.info("Saving file(s)...")
-            for i, arr_partition in enumerate(arr_partitions):
+            # If size doesnt exceed, save the array
+            if num_partitions == 1:
+                # No need to split the data array
+                logger.info("Saving file...")
                 path_to_save = (
-                    self.nwbfile_path.parent
-                    / f"{self.nwbfile_path.parent.name}_pyaldata_{i}.mat"
+                    self.nwbfile_path.parent / f"{self.nwbfile_path.parent.name}_pyaldata.mat"
                 )
-                scipy.io.savemat(path_to_save, {"pyaldata": arr_partition})
+                scipy.io.savemat(path_to_save, {"pyaldata": data_array})
+                return
+            else:
+                # Partition array
+                logger.info(
+                    f"Session ({nbytes / 2**30:.2f} GB) exceeds matlab 5 format (2 GB) "
+                )
+
+                logger.info(f"Partitioning array into {num_partitions} chunks...")
+                partition_sizes = [
+                    (recarray_size // num_partitions)
+                    + (1 if i < (recarray_size % num_partitions) else 0)
+                    for i in range(num_partitions)
+                ]
+
+                # Split the recarray accordingly
+                indices = np.cumsum([0] + partition_sizes)
+                arr_partitions = [
+                    data_array[indices[i] : indices[i + 1]] for i in range(num_partitions)
+                ]
+
+                logger.info("Saving file(s)...")
+                for i, arr_partition in enumerate(arr_partitions):
+                    path_to_save = (
+                        self.nwbfile_path.parent
+                        / f"{self.nwbfile_path.parent.name}_pyaldata_{i}.mat"
+                    )
+                    scipy.io.savemat(path_to_save, {"pyaldata": arr_partition})
 
             return
 
@@ -1053,6 +1084,12 @@ class ParsedNWBFile:
                     .strip()
                 )
                 if "y" in user_input:
+                    for file in self.nwbfile_path.parent.glob("*.mat"):
+                        try:
+                            file.unlink()  # delete the file
+                            print(f"Deleted: {file}")
+                        except Exception as e:
+                            print(f"Failed to delete {file}: {e}")
                     self._partition_and_save_to_mat()
                     logger.info("Session has been overwritten.")
                     break
