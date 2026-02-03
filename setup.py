@@ -12,7 +12,7 @@ setup(
             "bnd=bnd.cli:app",
         ],
     },
-    python_requires=">=3.10",
+    python_requires=">=3.0",
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
