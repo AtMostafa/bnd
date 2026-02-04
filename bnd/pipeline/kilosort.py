@@ -74,12 +74,21 @@ def _run_in_conda_env(
 ) -> subprocess.CompletedProcess:
     runner = _find_conda_runner()
     cmd = [runner, "run", "-n", env_name, *args]
+
+    # Workaround for WSL/DrvFs temp-file oddities (e.g., ftruncate -> ENOENT) when
+    # TEMP/TMP point to `/mnt/c/...`. Force a sane temp dir for subprocesses.
+    env = os.environ.copy()
+    if Path("/tmp").exists():
+        env["TMPDIR"] = "/tmp"
+        env["TEMP"] = "/tmp"
+        env["TMP"] = "/tmp"
     try:
         return subprocess.run(
             cmd,
             check=True,
             capture_output=capture_output,
             text=capture_output,
+            env=env,
         )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(
