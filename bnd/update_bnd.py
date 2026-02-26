@@ -121,22 +121,11 @@ def update_bnd(print_new_commits: bool = True) -> None:
     repo_path = _find_repo_path()
 
     if repo_path is None:
-        # pipx / pip install — reinstall from GitHub
-        pipx = shutil.which("pipx")
-        if pipx:
-            print("Updating via pipx ...")
-            subprocess.run(
-                [pipx, "install", "--force", f"bnd @ git+{_REPO_URL}"],
-                check=True,
-            )
-            print("\nPackage updated successfully.")
-        else:
-            print(
-                "Could not find pipx. Update manually with:\n"
-                f'  pipx install --force "bnd @ git+{_REPO_URL}"\n'
-                "  or:\n"
-                f'  pip install --force-reinstall "bnd @ git+{_REPO_URL}"'
-            )
+        # pipx / pip install — can't reinstall ourselves while running
+        print(
+            "bnd is installed via pipx. To update, run this in your terminal:\n\n"
+            f'  pipx install --force "bnd @ git+{_REPO_URL}"\n'
+        )
         return
 
     new_commits = _get_new_commits(repo_path)
