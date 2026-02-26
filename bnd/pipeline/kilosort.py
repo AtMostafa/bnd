@@ -109,7 +109,25 @@ def _check_kilosort_cuda(env_name: str) -> tuple[bool, str | None]:
         """
     ).strip()
 
-    proc = _run_in_conda_env(env_name, ["python", "-c", code], capture_output=True)
+    script_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write(code)
+            script_path = Path(f.name)
+
+        proc = _run_in_conda_env(
+            env_name, ["python", str(script_path)], capture_output=True
+        )
+    except Exception:
+        logger.debug("Could not check CUDA in env '%s'", env_name, exc_info=True)
+        return False, None
+    finally:
+        if script_path:
+            try:
+                script_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
     lines = [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()]
     if not lines:
         return False, None
@@ -138,13 +156,18 @@ def _run_kilosort_in_env(
     )
 
     tmp_path: Path | None = None
+    runner_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
             json.dump(payload, tmp)
             tmp_path = Path(tmp.name)
 
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as runner:
+            runner.write(_KILOSORT_RUNNER_CODE)
+            runner_path = Path(runner.name)
+
         _run_in_conda_env(
-            env_name, ["python", "-c", _KILOSORT_RUNNER_CODE, str(tmp_path)]
+            env_name, ["python", str(runner_path), str(tmp_path)]
         )
 
     except Exception as e:
@@ -155,11 +178,12 @@ def _run_kilosort_in_env(
         ) from e
 
     finally:
-        if tmp_path:
-            try:
-                tmp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+        for p in (tmp_path, runner_path):
+            if p:
+                try:
+                    p.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
 
 def read_metadata(filepath: Path) -> dict:
