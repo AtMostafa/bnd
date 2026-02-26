@@ -8,9 +8,9 @@ def _check_processing_dependencies():
         from .kilosort import run_kilosort_on_session
         from .nwb import run_nwb_conversion
         from .pyaldata import run_pyaldata_conversion
-    except Exception as e:
+    except ImportError as e:
         raise ImportError(
             f"Could not import processing dependencies: {e}. "
-            "Try: pipx upgrade bnd  or  pip install -e '.[dev]'"
-        )
+            "Try: pipx install --force 'bnd @ git+https://github.com/BeNeuroLab/bnd.git'"
+        ) from e
     return
