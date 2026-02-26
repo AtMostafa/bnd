@@ -40,7 +40,6 @@ _KILOSORT_RUNNER_CODE = textwrap.dedent(
         data_dir=params["data_dir"],
         results_dir=params["results_dir"],
         save_preprocessed_copy=params.get("save_preprocessed_copy", False),
-        verbose_console=params.get("verbose_console", False),
     )
 """
 ).strip()
@@ -152,7 +151,6 @@ def _run_kilosort_in_env(
         data_dir=str(data_dir),
         results_dir=str(results_dir),
         save_preprocessed_copy=False,
-        verbose_console=False,
     )
 
     tmp_path: Path | None = None
