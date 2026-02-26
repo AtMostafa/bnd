@@ -38,6 +38,7 @@ dependencies = [
     # -- misc ----------------------------------------------------------------
     "pydantic",
     "python-dateutil",
+    "pytz",
 ]
 
 [project.optional-dependencies]
