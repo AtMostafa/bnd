@@ -7,54 +7,92 @@ Play around with it and raise Github issues if anything fails
 
 # Setting up
 
-1. Install `conda`
-   - You can use either [Miniconda](https://docs.anaconda.com/miniconda/install/#quick-command-line-install) or [Miniforge](https://github.com/conda-forge/miniforge)
-2. Clone repo
+## 1. Install `bnd`
+
+### Option A — pipx (recommended)
+
+[pipx](https://pipx.pypa.io) installs `bnd` in an isolated environment and makes the CLI available system-wide.
+
+1. Install pipx if you don't have it:
+   ```shell
+   # Windows (requires Python ≥ 3.10)
+   pip install pipx
+   pipx ensurepath   # restart your terminal after this
+
+   # macOS / Linux
+   brew install pipx   # or: pip install pipx
+   pipx ensurepath
+   ```
+
+2. Install `bnd`:
+   ```shell
+   # Lightweight (upload, download, config only — fast install):
+   pipx install "bnd @ git+https://github.com/BeNeuroLab/bnd.git"
+
+   # Full install with processing dependencies (NWB, kilosort, pyaldata):
+   pipx install "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git"
+   ```
+   To install a specific branch (e.g. for testing):
+   ```shell
+   pipx install "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git@seperate-ks-env"
+   ```
+
+3. Verify:
+   ```shell
+   bnd --help
+   ```
+
+To **update** to the latest commits:
+```shell
+pipx install --force "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git"
+```
+
+### Option B — conda
+
+1. Install [Miniconda](https://docs.anaconda.com/miniconda/install/#quick-command-line-install) or [Miniforge](https://github.com/conda-forge/miniforge).
+2. Clone the repo and create the environment:
    ```shell
    git clone git@github.com:BeNeuroLab/bnd.git
    cd ./bnd
+   conda env create --file=processing_env.yml   # includes scientific dependencies
+   conda activate bnd
+   pip install -e .
    ```
-3. Open either Miniconda prompt or Miniforge promt and run the following command. This 
-   may take some time: 
-   ```shell
-   conda env create --file=env.yml
-   ```
-   or if you want the processing depedencies:
-   ```shell
-   conda env create --file=processing_env.yml
-   ```
-
-   For kilosorting, install Kilosort in a **separate** conda env called `kilosort` (not in `bnd`).
-   The `bnd` pipeline will invoke it via `conda run -n kilosort ...`.
-
-   1. Create and activate the env:
-      ```shell
-      conda create -n kilosort python=3.10 pip
-      conda activate kilosort
-      ```
-   2. Install Kilosort (see https://github.com/MouseLand/Kilosort):
-      ```shell
-      python -m pip install "kilosort[gui]"
-      ```
-      Or minimal:
-      ```shell
-      python -m pip install kilosort
-      ```
-   3. Install GPU-enabled PyTorch (example):
-      ```shell
-      conda install pytorch pytorch-cuda=11.8 -c pytorch -c nvidia
-      ```
-
-   If your env is not named `kilosort`, set `BND_KILOSORT_ENV` to the env name before running `bnd`.
-
-   If you installed the base environment and want to update later on:
+   To update later:
    ```shell
    conda env update --file=processing_env.yml
    ```
-4. Create your configuration file:
+
+## 2. Set up Kilosort (separate conda env)
+
+Kilosort runs in its own conda environment — `bnd` invokes it via `conda run -n kilosort ...`.
+
+1. Create and activate the env:
    ```shell
-   bnd init  # Provide the path to local and remote data storage
-   bnd --help # Start reading about the functions!
+   conda create -n kilosort python=3.10 pip
+   conda activate kilosort
+   ```
+2. Install Kilosort following the [official instructions](https://github.com/MouseLand/Kilosort):
+   ```shell
+   python -m pip install "kilosort[gui]"
+   ```
+   Or minimal (no GUI):
+   ```shell
+   python -m pip install kilosort
+   ```
+3. Install GPU-enabled PyTorch (example for CUDA 11.8):
+   ```shell
+   conda install pytorch pytorch-cuda=11.8 -c pytorch -c nvidia
+   ```
+
+> **Note:** If your env is not named `kilosort`, set the environment variable `BND_KILOSORT_ENV` to
+> the env name before running `bnd`.
+
+## 3. Configure `bnd`
+
+```shell
+bnd init    # Provide the path to local and remote data storage
+bnd --help  # Start reading about the functions!
 
 # Example usage
 Complete your experimental session on animal M099. Then:

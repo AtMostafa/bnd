@@ -10,7 +10,10 @@ def _check_processing_dependencies():
         from .pyaldata import run_pyaldata_conversion
     except ImportError as e:
         raise ImportError(
-            f"Could not import processing dependencies: {e}. "
-            "Try: pipx install --force 'bnd @ git+https://github.com/BeNeuroLab/bnd.git'"
+            f"Missing processing dependencies: {e}.\n"
+            "Install them with:\n"
+            '  pipx install --force "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git"\n'
+            "or:\n"
+            '  pip install "bnd[processing]"'
         ) from e
     return

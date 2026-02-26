@@ -16,10 +16,13 @@ classifiers = [
 ]
 
 dependencies = [
-    # -- CLI -----------------------------------------------------------------
+    # -- CLI (lightweight base) ----------------------------------------------
     "typer>=0.9",
     "rich",
+]
 
+[project.optional-dependencies]
+processing = [
     # -- data I/O & NWB ------------------------------------------------------
     "pynwb>=2.5",
     "ndx-pose",
@@ -40,10 +43,9 @@ dependencies = [
     "python-dateutil",
     "pytz",
 ]
-
-[project.optional-dependencies]
 dev = [
     "pytest",
+    "bnd[processing]",
 ]
 
 [project.scripts]
