@@ -19,8 +19,8 @@ Play around with it and raise Github issues if anything fails
    pip install pipx
    pipx ensurepath   # restart your terminal after this
 
-   # macOS / Linux
-   brew install pipx   # or: pip install pipx
+   # Linux
+   sudo apt install pipx
    pipx ensurepath
    ```
 
