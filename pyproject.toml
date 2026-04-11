@@ -19,6 +19,7 @@ dependencies = [
     # -- CLI (lightweight base) ----------------------------------------------
     "typer>=0.9",
     "rich",
+    "typing_extensions",
 ]
 
 [project.optional-dependencies]
