@@ -299,7 +299,7 @@ class MultiProbeKiloSortInterface(KiloSortSortingInterface):
             ks_path.name.split("_")[-1] for ks_path in self.sorter_output_paths
         ]
         self.kilosort_interfaces = [
-            KiloSortSortingInterface(folder_path, keep_good_only, verbose)
+            KiloSortSortingInterface(folder_path, keep_good_only=keep_good_only, verbose=verbose)
             for folder_path in self.sorter_output_paths
         ]
 
@@ -520,5 +520,5 @@ class MultiProbeKiloSortInterface(KiloSortSortingInterface):
             write_as=write_as,
             units_name=units_name,
             units_description=units_description,
-            waveform_means=waveform_means,
+            waveform_data_dict={"means": waveform_means} if waveform_means is not None else None,
         )
