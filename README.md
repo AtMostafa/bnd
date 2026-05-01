@@ -27,14 +27,14 @@ Play around with it and raise Github issues if anything fails
 2. Install `bnd`:
    ```shell
    # Lightweight (upload, download, config only — fast install):
-   pipx install "bnd @ git+https://github.com/BeNeuroLab/bnd.git"
+   pipx install "bnd @ git+https://github.com/AtMostafa/bnd.git"
 
    # Full install with processing dependencies (NWB, kilosort, pyaldata):
-   pipx install "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git"
+   pipx install "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git"
    ```
    To install a specific branch (e.g. for testing):
    ```shell
-   pipx install "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git@seperate-ks-env"
+   pipx install "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git@seperate-ks-env"
    ```
 
 3. Verify:
@@ -44,7 +44,7 @@ Play around with it and raise Github issues if anything fails
 
 To **update** to the latest commits:
 ```shell
-pipx install --force "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git"
+pipx install --force "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git"
 ```
 
 ### Option B — conda
