@@ -88,7 +88,7 @@ class BeNeuroConverter(NWBConverter):
 
     # logger.info("Extracted available interfaces")
 
-    def temporally_align_data_interfaces(self):
+    def temporally_align_data_interfaces(self, metadata=None, conversion_options=None):
         adjusting_times = {}
 
         if "PyControl" in self.data_interface_objects:

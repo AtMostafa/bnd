@@ -97,8 +97,8 @@ def _bin_spikes(probe_units: Units, bin_size: float) -> np.array:
     binned_spikes = np.zeros((len(probe_units.id[:]), number_of_bins), dtype=int)
 
     # Populate the binned spikes array
-    for neuron_id in probe_units.id:
-        spike_times = probe_units.get_unit_spike_times(neuron_id)
+    for idx, neuron_id in enumerate(probe_units.id[:]):
+        spike_times = probe_units.get_unit_spike_times(index=idx)
 
         # Taks spikes from after start time
         spike_times = spike_times[spike_times >= start_time]
@@ -107,7 +107,7 @@ def _bin_spikes(probe_units: Units, bin_size: float) -> np.array:
         bin_indices = (spike_times / bin_size).astype(int)
 
         # Add them to the corresponding bin.
-        np.add.at(binned_spikes, (neuron_id, bin_indices), 1)
+        np.add.at(binned_spikes, (idx, bin_indices), 1)
 
     return binned_spikes
 
@@ -820,7 +820,7 @@ class ParsedNWBFile:
         num_partitions = int(np.ceil(nbytes / (2**31)))
         recarray_size = len(data_array)
 
-        assert num_partitions >= 1 and num_partitions < len(data_array)  # General checks
+        assert num_partitions >= 1  # Data must be non-empty
 
         # If size doesnt exceed, save the array
         if num_partitions == 1:

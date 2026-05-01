@@ -8,7 +8,7 @@ from pathlib import Path
 
 import dateutil.tz
 import numpy as np
-from neuroconv.basetemporalalignmentinterface import BaseTemporalAlignmentInterface
+from neuroconv import BaseTemporalAlignmentInterface
 from neuroconv.utils import DeepDict
 from pydantic import FilePath
 from pynwb import NWBFile
