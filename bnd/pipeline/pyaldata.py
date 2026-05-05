@@ -709,7 +709,7 @@ class ParsedNWBFile:
 
         def _is_empty_array_or_nans(value):
             if isinstance(value, np.ndarray):
-                if value.ndim == 0 and np.isnan(value.item()):
+                if value.ndim == 0 and np.isnan(np.asarray(value.item(), dtype=float)):
                     return True
                 elif value.ndim > 0 and all(np.isnan(item) for item in value):
                     return True
