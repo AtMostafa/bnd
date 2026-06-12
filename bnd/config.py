@@ -73,6 +73,10 @@ class Config:
         self.datetime_pattern = "%Y_%m_%d_%H_%M"
         self.session_name_re = r"^M\d{3}_(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})"
         self.video_formats = (".avi", ".mp4", ".AVI", ".MP4")
+        self.GATE_RE = re.compile(r"_g._")
+        self.KSORT_RE = re.compile(r"_ksort", re.IGNORECASE)
+        self.CAMERA_RE = re.compile(r"_cameras?\b", re.IGNORECASE)
+
 
     def load_env(self, env_path: Path):
         with open(env_path, "r") as file:

@@ -16,7 +16,7 @@ from .config import (
     get_last_session,
     list_session_datetime,
 )
-from .data_transfer import download_session, upload_session
+from .data_transfer import download_session, download_session_light, upload_session
 from .pipeline import _check_processing_dependencies
 from .update_bnd import check_for_updates, update_bnd
 
@@ -200,6 +200,29 @@ def dl(
         `bnd dl M056_2025_03_01 .mat` will download all the '.mat' files from the matching session
     """
     download_session(session_name, file_extension, max_size_MB, do_video)
+
+
+@app.command()
+def dl_light(
+    session_name: str = typer.Argument(help="Name of session: M123_2000_02_03_14_15"),
+    max_size_MB: float = typer.Option(
+        0,
+        "--max-size",
+        help="Maximum size in MB. Any smaller file will be downloaded. Zero mean infinite size.",
+    ),
+):
+    """
+    Download a session, skipping bulky raw data.
+    Like `dl` but always skips: video files, SpikeGLX data files (`..._g?_...`) except their `*.meta`
+    files, anything inside a `..._ksort` folder, and anything inside a `..._camera`/`..._cameras` folder.
+    If session exists locally, only missing files will be downloaded.
+
+    \b
+    Example usage:
+        `bnd dl-light M017_2024_03_12_18_45` downloads everything except the bulky raw data
+        `bnd dl-light M056_2025_03_01 .mat` downloads all the '.mat' files from the matching session
+    """
+    download_session_light(session_name, max_size_MB)
 
 
 # =================================== Batch ==========================================

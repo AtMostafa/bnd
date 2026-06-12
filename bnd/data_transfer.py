@@ -133,6 +133,91 @@ def download_session(session_name: str, file_extension: str, max_size_MB: float,
 
     logger.info("Download complete.")
 
+
+def download_session_light(session_name: str, max_size_MB: float = 0) -> None:
+    """
+    Download a session from the server, like `download_session`, but skipping bulky raw data.
+
+    The following are always skipped, regardless of `max_size_MB`:
+    - video files,
+    - SpikeGLX (`..._g?_...`) data files except the `*.meta` metadata files,
+    - anything inside a `..._ksort` folder,
+    - anything inside a `..._camera` or `..._cameras` folder.
+
+    Parameters are the same as `download_session` (videos are never downloaded here).
+    """
+    config = _load_config()
+
+    if not config.file_name_ok(session_name):
+        # bad session name, try to find a session with a similar name
+        remote_animal_path = config.get_remote_animal_path(session_name)
+        _, session_list = list_session_datetime(remote_animal_path)
+        match_session = [session for session in session_list if session_name in session]
+        if match_session:
+            session_name = match_session[0]
+            response = input(f"\nDid you mean {session_name} (y/n)? ").strip().lower()
+            if "n" in response:
+                logger.error("Download aborted!")
+                return
+            logger.info(f"Session name corrected to {session_name}")
+        else:
+            logger.error("Bad session name. Download aborted!")
+            return
+
+    if int(max_size_MB) <= 0:
+        max_size = float("inf")
+    else:
+        max_size = max_size_MB * 1024 * 1024  # convert to bytes
+
+    remote_session_path = config.get_remote_session_path(session_name)
+    local_session_path = config.get_local_session_path(session_name)
+    if local_session_path.exists():
+        logger.info(f"Session {session_name} exists locally.")
+
+    # Excluding directories as `rglob()` returns directories as well
+    # Including only files with the right extension.
+    remote_files = [file for file in remote_session_path.rglob("*.*") if file.is_file()]
+
+    for file in remote_files:
+        if file.suffix in config.video_formats:
+            logger.info(f'"{file.name}" is a video file. Skipping.')
+            continue  # skip video files
+
+        # Path components of the file, relative to the session folder.
+        rel_parts = file.relative_to(remote_session_path).parts
+        dir_parts = rel_parts[:-1]
+
+        if any(config.KSORT_RE.search(part) for part in dir_parts):
+            logger.info(f'"{file.name}" is inside a kilosort folder. Skipping.')
+            continue
+
+        if any(config.CAMERA_RE.search(part) for part in dir_parts):
+            logger.info(f'"{file.name}" is inside a camera folder. Skipping.')
+            continue
+
+        # Under a SpikeGLX gate path (folder or file name), keep only the *.meta files.
+        if any(config.GATE_RE.search(part) for part in rel_parts) and file.suffix != ".meta":
+            logger.info(f'"{file.name}" is raw gate data (keeping only *.meta). Skipping.')
+            continue
+
+        if file.stat().st_size < max_size:
+            local_file = config.convert_to_local(file)
+            if local_file.exists():
+                logger.warning(f'"{file.name}" exists locally. Skipping.')
+                continue
+            # Ensure the destination directory exists
+            local_file.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(file, local_file)
+            except PermissionError:
+                shutil.copyfile(file, local_file)
+            logger.info(f'Downloaded "{file.name}"')
+        else:
+            logger.info(f'"{file.name}" is too large. Skipping.')
+
+    logger.info("Download complete.")
+
+
 def download_animal(animal_name: str, file_extension: str, max_size_MB: float = 0, do_video: bool = False) -> None:
     """
     Download a all the data of an animal from the server.
