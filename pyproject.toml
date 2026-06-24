@@ -38,6 +38,7 @@ processing = [
     "numpy",
     "pandas",
     "scipy",
+    "hdf5storage",   # write pyaldata as MATLAB v7.3 (no 2 GB limit)
 
     # -- misc ----------------------------------------------------------------
     "pydantic",

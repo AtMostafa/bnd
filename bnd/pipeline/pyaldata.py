@@ -15,6 +15,7 @@ from pynwb.misc import Units
 from ..config import _load_config
 from ..logger import set_logging
 from ..pipeline.nwb import run_nwb_conversion
+from .mat_io import save_pyaldata_mat
 
 logger = set_logging(__name__)
 
@@ -809,67 +810,34 @@ class ParsedNWBFile:
 
         return
 
-    def _partition_and_save_to_mat(self):
+    def _save_to_mat(self):
         """
-        Checks if data_array needs to be partitioned wrt. max matlab 5 file format and saves it
+        Save the pyaldata struct array to a single MATLAB v7.3 (HDF5) file.
+
+        v7.3 has no 2 GB-per-file limit, so the whole session is stored as one
+        struct array (no trial partitioning). Read back with
+        ``pyaldata.mat2dataframe`` (hdf5storage).
         """
         data_array = self.pyaldata_df.to_records(index=False)
+        assert len(data_array) >= 1, "Empty pyaldata: no trials to save"
 
-        # Check if size exceeds matlab 5 format
-        nbytes = _get_nbytes_from_recarray(recarray=data_array)
-        num_partitions = int(np.ceil(nbytes / (2**31)))
-        recarray_size = len(data_array)
+        out_dir = self.nwbfile_path.parent
+        # Drop any stale pyaldata files: legacy v5 ``*_pyaldata_N.mat`` partitions
+        # (so the loader doesn't concatenate old data with the new file).
+        for old in (*out_dir.glob("*pyaldata*.mat"),):
+            old.unlink()
 
-        assert num_partitions >= 1  # Data must be non-empty
-        if num_partitions > recarray_size:
-            raise ValueError(
-                f"Cannot partition {recarray_size} trial(s) into {num_partitions} "
-                f"chunks ({nbytes / 2**30:.2f} GB): a single trial exceeds the 2 GB "
-                f"MAT-v5 limit. Check trial segmentation, or save as MAT v7.3/HDF5."
-            )
-
-        # If size doesnt exceed, save the array
-        if num_partitions == 1:
-            # No need to split the data array
-            logger.info("Saving file...")
-            path_to_save = (
-                self.nwbfile_path.parent / f"{self.nwbfile_path.parent.name}_pyaldata.mat"
-            )
-            scipy.io.savemat(path_to_save, {"pyaldata": data_array})
-            return
-        else:
-            # Partition array
-            logger.info(f"Session ({nbytes / 2**30:.2f} GB) exceeds matlab 5 format (2 GB) ")
-
-            logger.info(f"Partitioning array into {num_partitions} chunks...")
-            partition_sizes = [
-                (recarray_size // num_partitions)
-                + (1 if i < (recarray_size % num_partitions) else 0)
-                for i in range(num_partitions)
-            ]
-
-            # Split the recarray accordingly
-            indices = np.cumsum([0] + partition_sizes)
-            arr_partitions = [
-                data_array[indices[i] : indices[i + 1]] for i in range(num_partitions)
-            ]
-
-            logger.info("Saving file(s)...")
-            for i, arr_partition in enumerate(arr_partitions):
-                path_to_save = (
-                    self.nwbfile_path.parent
-                    / f"{self.nwbfile_path.parent.name}_pyaldata_{i}.mat"
-                )
-                scipy.io.savemat(path_to_save, {"pyaldata": arr_partition})
-
-            return
+        path_to_save = out_dir / f"{out_dir.name}_pyaldata.mat"
+        logger.info(f"Saving pyaldata as MATLAB v7.3 -> {path_to_save.name}")
+        save_pyaldata_mat(data_array, path_to_save)
+        return
 
     def save(self):
         """
         Main saving routine
         """
 
-        if any(self.nwbfile_path.parent.rglob(f"*.mat")):
+        if any(self.nwbfile_path.parent.rglob("*.mat")):
             # Prompt the user with an interactive menu
             while True:
                 user_input = (
@@ -878,7 +846,7 @@ class ParsedNWBFile:
                     .strip()
                 )
                 if "y" in user_input:
-                    self._partition_and_save_to_mat()
+                    self._save_to_mat()
                     logger.info("Session has been overwritten.")
                     break
 
@@ -889,7 +857,7 @@ class ParsedNWBFile:
                 else:
                     logger.info("Please enter 'y' for yes or 'n' for no.")
         else:
-            self._partition_and_save_to_mat()
+            self._save_to_mat()
             logger.info(f"Saved pyaldata file(s) in {self.nwbfile_path.parent.name} session")
         return
 
