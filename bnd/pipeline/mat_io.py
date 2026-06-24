@@ -32,6 +32,5 @@ def save_pyaldata_mat(data_array: np.recarray, path: "str | Path") -> None:
         format="7.3",
         matlab_compatible=True,
         truncate_existing=True,
-        compress=True,
-        compression_algorithm="gzip",
+        compress=False
     )
