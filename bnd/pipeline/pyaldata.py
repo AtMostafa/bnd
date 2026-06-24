@@ -821,6 +821,12 @@ class ParsedNWBFile:
         recarray_size = len(data_array)
 
         assert num_partitions >= 1  # Data must be non-empty
+        if num_partitions > recarray_size:
+            raise ValueError(
+                f"Cannot partition {recarray_size} trial(s) into {num_partitions} "
+                f"chunks ({nbytes / 2**30:.2f} GB): a single trial exceeds the 2 GB "
+                f"MAT-v5 limit. Check trial segmentation, or save as MAT v7.3/HDF5."
+            )
 
         # If size doesnt exceed, save the array
         if num_partitions == 1:
