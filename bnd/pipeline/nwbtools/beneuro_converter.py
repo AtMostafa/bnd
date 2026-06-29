@@ -146,12 +146,26 @@ class BeNeuroConverter(NWBConverter):
                 # )
                 # ===============================================================================
 
-                # this is used to get the sync channel's values
-                # and figure out when the first rising edge is
+                # This is used to get the sync channel's values and figure out when
+                # the first rising edge is.
+                # Newer spikeinterface/neo removed the `load_sync_channel` kwarg and
+                # instead expose the SpikeGLX sync channel as its own dedicated
+                # "<stream>-SYNC" stream (e.g. "imec0.ap-SYNC").
+                ap_stream = f"{probe_name}.ap"
+                sync_stream = f"{ap_stream}-SYNC"
+                available_streams, _ = se.get_neo_streams(
+                    "spikeglx", str(spikeglx_output_folder_path)
+                )
+                if sync_stream not in available_streams:
+                    raise RuntimeError(
+                        f"No SpikeGLX sync stream '{sync_stream}' found for probe "
+                        f"'{probe_name}'. Available streams: {available_streams}. "
+                        "The recording appears to have been saved without a sync "
+                        "channel, which is required for temporal alignment."
+                    )
                 rec_with_sync_channel = se.read_spikeglx(
                     spikeglx_output_folder_path,  # Used to be raw_session_path
-                    stream_name=f"{probe_name}.ap",
-                    load_sync_channel=True,
+                    stream_name=sync_stream,
                 )
 
                 # Find the first rising edge without having to read the
