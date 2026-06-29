@@ -1,8 +1,6 @@
 import os
 import json
-import shutil
 import subprocess
-import tempfile
 import textwrap
 from configparser import ConfigParser
 from pathlib import Path
@@ -16,172 +14,71 @@ logger = set_logging(__name__)
 
 _KILOSORT_RUNNER_CODE = textwrap.dedent(
     """
-    import json
-    import sys
-    from pathlib import Path
-
-    params_path = Path(sys.argv[1])
-    params = json.loads(params_path.read_text())
-
+    import json, sys
     from kilosort import run_kilosort
     from kilosort.utils import PROBE_DIR, download_probes
 
-    probe_name = params["probe_name"]
-
-    if not PROBE_DIR.exists():
-        download_probes()
-
-    if not any(PROBE_DIR.glob(probe_name)):
+    params = json.loads(sys.argv[1])
+    if not PROBE_DIR.exists() or not any(PROBE_DIR.glob(params["probe_name"])):
         download_probes()
 
     run_kilosort(
         settings=params["settings"],
-        probe_name=probe_name,
+        probe_name=params["probe_name"],
         data_dir=params["data_dir"],
         results_dir=params["results_dir"],
-        save_preprocessed_copy=params.get("save_preprocessed_copy", False),
+        save_preprocessed_copy=False,
     )
-"""
+    """
 ).strip()
 
 
-def _get_kilosort_env_name() -> str:
-    return (
-        os.environ.get("BND_KILOSORT_ENV")
-        or os.environ.get("KILOSORT_CONDA_ENV")
-        or "kilosort"
-    )
+def _kilosort_env() -> str:
+    """Name of the conda env that has Kilosort installed."""
+    return os.environ.get("BND_KILOSORT_ENV", "kilosort")
 
 
-def _find_conda_runner() -> str:
-    conda_exe = os.environ.get("CONDA_EXE")
-    if conda_exe and Path(conda_exe).exists():
-        return conda_exe
+def _run_in_kilosort_env(args: list[str], *, capture: bool = False) -> subprocess.CompletedProcess:
+    """Run a command inside the Kilosort conda env via `conda run`.
 
-    for candidate in ("conda", "mamba", "micromamba"):
-        resolved = shutil.which(candidate)
-        if resolved:
-            return resolved
-
-    raise FileNotFoundError(
-        "Could not find a conda runner executable (tried CONDA_EXE, conda, mamba, micromamba)."
-    )
-
-
-def _run_in_conda_env(
-    env_name: str, args: list[str], *, capture_output: bool = False
-) -> subprocess.CompletedProcess:
-    runner = _find_conda_runner()
-    cmd = [runner, "run", "-n", env_name, *args]
-
-    # Workaround for WSL/DrvFs temp-file oddities (e.g., ftruncate -> ENOENT) when
-    # TEMP/TMP point to `/mnt/c/...`. Force a sane temp dir for subprocesses.
-    env = os.environ.copy()
-    if Path("/tmp").exists():
-        env["TMPDIR"] = "/tmp"
-        env["TEMP"] = "/tmp"
-        env["TMP"] = "/tmp"
+    Assumes `conda` is available in the terminal running bnd (i.e. where
+    `conda activate <env>` works). Output streams live unless `capture` is set.
+    """
+    cmd = ["conda", "run", "-n", _kilosort_env()]
+    if not capture:
+        cmd.append("--no-capture-output")
     try:
-        return subprocess.run(
-            cmd,
-            check=True,
-            capture_output=capture_output,
-            text=capture_output,
-            env=env,
-        )
-    except subprocess.CalledProcessError as e:
+        return subprocess.run([*cmd, *args], check=True, capture_output=capture, text=capture)
+    except FileNotFoundError as e:
         raise RuntimeError(
-            f"Command failed in conda env '{env_name}': {cmd} (exit code {e.returncode})."
+            "`conda` was not found. Run bnd from a terminal where conda is available "
+            "(i.e. where `conda activate` works)."
         ) from e
 
 
-def _check_kilosort_cuda(env_name: str) -> tuple[bool, str | None]:
-    code = textwrap.dedent(
-        """
-        import torch
-
-        if torch.cuda.is_available():
-            print("CUDA_AVAILABLE")
-            print(torch.cuda.get_device_name(0))
-        else:
-            print("CUDA_NOT_AVAILABLE")
-        """
-    ).strip()
-
-    script_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-            f.write(code)
-            script_path = Path(f.name)
-
-        proc = _run_in_conda_env(
-            env_name, ["python", str(script_path)], capture_output=True
-        )
-    except Exception:
-        logger.debug("Could not check CUDA in env '%s'", env_name, exc_info=True)
-        return False, None
-    finally:
-        if script_path:
-            try:
-                script_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-
-    lines = [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()]
-    if not lines:
-        return False, None
-
-    if lines[0] == "CUDA_AVAILABLE":
-        return True, lines[1] if len(lines) > 1 else None
-
-    return False, None
-
-
-def _run_kilosort_in_env(
-    *,
-    env_name: str,
-    settings: dict,
-    probe_name: str,
-    data_dir: Path,
-    results_dir: Path,
-) -> None:
-    payload = dict(
-        settings=settings,
-        probe_name=probe_name,
-        data_dir=str(data_dir),
-        results_dir=str(results_dir),
-        save_preprocessed_copy=False,
+def _kilosort_cuda() -> tuple[bool, str | None]:
+    """Report (cuda_available, device_name) from inside the Kilosort env."""
+    code = (
+        "import torch; ok = torch.cuda.is_available();"
+        "print(ok); print(torch.cuda.get_device_name(0) if ok else '')"
     )
+    out = _run_in_kilosort_env(["python", "-c", code], capture=True).stdout.splitlines()
+    available = bool(out) and out[0].strip() == "True"
+    device = out[1].strip() if available and len(out) > 1 and out[1].strip() else None
+    return available, device
 
-    tmp_path: Path | None = None
-    runner_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
-            json.dump(payload, tmp)
-            tmp_path = Path(tmp.name)
 
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as runner:
-            runner.write(_KILOSORT_RUNNER_CODE)
-            runner_path = Path(runner.name)
-
-        _run_in_conda_env(
-            env_name, ["python", str(runner_path), str(tmp_path)]
+def _run_kilosort_in_env(*, settings: dict, probe_name: str, data_dir: Path, results_dir: Path) -> None:
+    """Run Kilosort on one probe inside the Kilosort conda env."""
+    params = json.dumps(
+        dict(
+            settings=settings,
+            probe_name=probe_name,
+            data_dir=str(data_dir),
+            results_dir=str(results_dir),
         )
-
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to run Kilosort in the separate conda env '{env_name}'. "
-            "Make sure it exists and has the `kilosort` package installed. "
-            "You can override the env name via BND_KILOSORT_ENV."
-        ) from e
-
-    finally:
-        for p in (tmp_path, runner_path):
-            if p:
-                try:
-                    p.unlink(missing_ok=True)
-                except Exception:
-                    pass
+    )
+    _run_in_kilosort_env(["python", "-c", _KILOSORT_RUNNER_CODE, params])
 
 
 def read_metadata(filepath: Path) -> dict:
@@ -297,9 +194,7 @@ def run_kilosort_on_stream(
     # Find out which probe type we have
     probe_name = _read_probe_type(meta_file_path)
 
-    env_name = _get_kilosort_env_name()
     _run_kilosort_in_env(
-        env_name=env_name,
         settings=sorter_params,
         probe_name=probe_name,
         data_dir=probe_folder_path,
@@ -373,8 +268,8 @@ def run_kilosort_on_session(session_path: Path) -> None:
 
     else:
         ephys_recording_folders = config.get_subdirectories_from_pattern(session_path, "*_g?")
-        env_name = _get_kilosort_env_name()
-        cuda_available, device_name = _check_kilosort_cuda(env_name)
+        env_name = _kilosort_env()
+        cuda_available, device_name = _kilosort_cuda()
         if cuda_available:
             if device_name:
                 logger.info(f"CUDA is available in '{env_name}'. GPU device: {device_name}")
