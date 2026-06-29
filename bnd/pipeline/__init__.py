@@ -12,7 +12,7 @@ def _check_processing_dependencies():
         raise ImportError(
             f"Missing processing dependencies: {e}.\n"
             "Install them with:\n"
-            '  pipx install --force "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git"\n'
+            '  uv tool install --reinstall "bnd[processing] @ git+https://github.com/BeNeuroLab/bnd.git"\n'
             "or:\n"
             '  pip install "bnd[processing]"'
         ) from e

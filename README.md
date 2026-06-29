@@ -9,32 +9,37 @@ Play around with it and raise Github issues if anything fails
 
 ## 1. Install `bnd`
 
-### Option A — pipx (recommended)
+### Option A — uv tool (recommended)
 
-[pipx](https://pipx.pypa.io) installs `bnd` in an isolated environment and makes the CLI available system-wide.
+[uv](https://docs.astral.sh/uv/) installs `bnd` in an isolated environment and makes the CLI available system-wide.
 
-1. Install pipx if you don't have it:
+> **Upgrading from an older version?** Earlier releases were installed with pipx. Remove that
+> first so the two installs don't shadow each other:
+> ```shell
+> pipx uninstall bnd
+> ```
+
+1. Install uv if you don't have it:
    ```shell
-   # Windows (requires Python ≥ 3.10)
-   pip install pipx
-   pipx ensurepath   # restart your terminal after this
+   # Linux / macOS
+   curl -LsSf https://astral.sh/uv/install.sh | sh
 
-   # Linux
-   sudo apt install pipx
-   pipx ensurepath
+   # Windows (PowerShell)
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
+   Restart your terminal afterwards (or run `uv tool update-shell`) so the tool directory is on your PATH.
 
 2. Install `bnd`:
    ```shell
    # Lightweight (upload, download, config only — fast install):
-   pipx install "bnd @ git+https://github.com/AtMostafa/bnd.git"
+   uv tool install "bnd @ git+https://github.com/AtMostafa/bnd.git"
 
    # Full install with processing dependencies (NWB, kilosort, pyaldata):
-   pipx install "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git"
+   uv tool install "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git"
    ```
    To install a specific branch (e.g. for testing):
    ```shell
-   pipx install "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git@seperate-ks-env"
+   uv tool install "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git@seperate-ks-env"
    ```
 
 3. Verify:
@@ -44,8 +49,10 @@ Play around with it and raise Github issues if anything fails
 
 To **update** to the latest commits:
 ```shell
-pipx install --force "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git"
+uv tool upgrade bnd --reinstall
 ```
+`bnd` tracks a git branch rather than a pinned version, so `--reinstall` is needed to make uv
+re-fetch and pick up the newest commits.
 
 ### Option B — conda
 

@@ -9,8 +9,6 @@ from .config import _get_package_path
 
 logger = set_logging(__name__)
 
-_REPO_URL = "https://github.com/BeNeuroLab/bnd.git"
-
 
 def _find_repo_path() -> Path | None:
     """Return the git repo root if bnd was installed from a local clone, else None."""
@@ -92,7 +90,7 @@ def check_for_updates() -> bool:
         print(
             "bnd is not installed from a local git clone.\n"
             "To update, run:\n"
-            f'  pipx install --force "bnd @ git+{_REPO_URL}"'
+            "  uv tool upgrade bnd --reinstall"
         )
         return False
 
@@ -111,7 +109,7 @@ def check_for_updates() -> bool:
 
 def update_bnd(print_new_commits: bool = True) -> None:
     """
-    Update bnd. Uses git pull for editable installs, or pipx reinstall otherwise.
+    Update bnd. Uses git pull for editable installs, or a uv tool reinstall otherwise.
 
     Parameters
     ----------
@@ -121,10 +119,10 @@ def update_bnd(print_new_commits: bool = True) -> None:
     repo_path = _find_repo_path()
 
     if repo_path is None:
-        # pipx / pip install — can't reinstall ourselves while running
+        # uv tool / pip install — can't reinstall ourselves while running
         print(
-            "bnd is installed via pipx. To update, run this in your terminal:\n\n"
-            f'  pipx install --force "bnd @ git+{_REPO_URL}"\n'
+            "bnd is installed as a uv tool. To update, run this in your terminal:\n\n"
+            "  uv tool upgrade bnd --reinstall\n"
         )
         return
 
