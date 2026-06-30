@@ -107,11 +107,9 @@ def _read_probe_type(meta_file_path: str) -> str:
     meta = read_metadata(meta_file_path)
     probe_type_val = meta["imDatPrb_type"]
     if int(probe_type_val) == 0:
-        probe_type = (
-            "neuropixPhase3B1_kilosortChanMap.mat"  # Neuropixels Phase3B1 (staggered)
-        )
+        probe_type = "NeuroPix1_default.mat"  # Neuropixels 1.0 (Phase3B)
     elif int(probe_type_val) == 2013:
-        probe_type = "NP2_kilosortChanMap.mat"
+        probe_type = "NeuroPix2_default.mat"  # Neuropixels 2.0
     else:
         raise ValueError(
             "Probe type not recogised. It appears to be different from Npx 1.0 or 2.0"
@@ -154,7 +152,7 @@ def run_kilosort_on_stream(
     probe_folder_path: Path,
     recording_path: Path,
     session_path: Path,
-    probe_name: str = "neuropixPhase3B1_kilosortChanMap.mat",
+    probe_name: str = "NeuroPix1_default.mat",
 ) -> None:
     """
     Runs kilosort4 on a raw SpikeGLX data and saves to output folder within the directory
