@@ -6,6 +6,7 @@ import typer
 from typing_extensions import Annotated
 
 from rich import print
+from rich.tree import Tree
 
 from .config import (
     _check_root,
@@ -14,6 +15,7 @@ from .config import (
     _get_package_path,
     _load_config,
     get_last_session,
+    list_dirs,
     list_session_datetime,
 )
 from .data_transfer import download_session, download_session_light, upload_session
@@ -223,6 +225,51 @@ def dl_light(
         `bnd dl-light M056_2025_03_01 .mat` downloads all the '.mat' files from the matching session
     """
     download_session_light(session_name, max_size_MB)
+
+
+# =================================== Listing ==========================================
+
+
+@app.command()
+def ls(
+    animal_name: str = typer.Argument(
+        None, help="Animal name: M123. If omitted, list every animal."
+    ),
+):
+    """
+    List the sessions available locally.
+
+    \b
+    Example usage:
+        `bnd ls` lists every animal and its sessions
+        `bnd ls M017` lists the sessions of M017 only
+    """
+    config = _load_config()
+    raw_path = config.LOCAL_PATH / "raw"
+
+    if animal_name is not None:
+        animal_path = config.get_local_animal_path(animal_name)
+        if not animal_path.is_dir():
+            print(f"[red]Animal {animal_name} not found in {raw_path}")
+            raise typer.Exit(code=1)
+        animal_names = [animal_path.name]
+    else:
+        animal_names = sorted(list_dirs(raw_path))
+        if not animal_names:
+            print(f"[yellow]No animals found in {raw_path}")
+            return
+
+    tree = Tree(f"[bold]{raw_path}")
+    for animal in animal_names:
+        _, sessions = list_session_datetime(raw_path / animal)
+        branch = tree.add(f"[bold cyan]{animal}[/] [dim]({len(sessions)})")
+        if sessions:
+            for session in sessions:
+                branch.add(session)
+        else:
+            branch.add("[dim]no sessions")
+
+    print(tree)
 
 
 # =================================== Batch ==========================================
