@@ -5,11 +5,11 @@ BeNeuro Lab, and a CLI tool called `bnd` for easy access to this functionality.
 
 Play around with it and raise Github issues if anything fails
 
-# Setting up
+## Setting up
 
-## 1. Install `bnd`
+### 1. Install `bnd`
 
-### Option A — uv tool (recommended)
+#### Option A — uv tool (recommended)
 
 [uv](https://docs.astral.sh/uv/) installs `bnd` in an isolated environment and makes the CLI available system-wide.
 
@@ -28,8 +28,15 @@ Play around with it and raise Github issues if anything fails
    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
    Restart your terminal afterwards (or run `uv tool update-shell`) so the tool directory is on your PATH.
-
-2. Install `bnd`:
+2. Deactivate conda environments:
+  ```shell
+   conda deactivate
+  ```
+   Even better, disable auto-activating of the `base` conda environment:
+   ```shell
+   conda config --set auto_activate_base false
+   ```
+3. Install `bnd`:
    ```shell
    # Lightweight (upload, download, config only — fast install):
    uv tool install "bnd @ git+https://github.com/AtMostafa/bnd.git"
@@ -42,19 +49,20 @@ Play around with it and raise Github issues if anything fails
    uv tool install "bnd[processing] @ git+https://github.com/AtMostafa/bnd.git@seperate-ks-env"
    ```
 
-3. Verify:
+4. Verify:
    ```shell
    bnd --help
    ```
 
 To **update** to the latest commits:
 ```shell
+conda deactivate
 uv tool upgrade bnd --reinstall
 ```
 `bnd` tracks a git branch rather than a pinned version, so `--reinstall` is needed to make uv
 re-fetch and pick up the newest commits.
 
-### Option B — conda
+#### Option B — conda
 
 1. Install [Miniconda](https://docs.anaconda.com/miniconda/install/#quick-command-line-install) or [Miniforge](https://github.com/conda-forge/miniforge).
 2. Clone the repo and create the environment:
@@ -70,7 +78,7 @@ re-fetch and pick up the newest commits.
    conda env update --file=processing_env.yml
    ```
 
-## 2. Set up Kilosort (separate conda env)
+### 2. Set up Kilosort (separate conda env)
 
 Kilosort runs in its own conda environment — `bnd` invokes it via `conda run -n kilosort ...`.
 
@@ -95,14 +103,14 @@ Kilosort runs in its own conda environment — `bnd` invokes it via `conda run -
 > **Note:** If your env is not named `kilosort`, set the environment variable `BND_KILOSORT_ENV` to
 > the env name before running `bnd`.
 
-## 3. Configure `bnd`
+### 3. Configure `bnd`
 
 ```shell
 bnd init    # Provide the path to local and remote data storage
 bnd --help  # Start reading about the functions!
 ```
 
-# Example usage
+## Example usage
 
 Complete your experimental session on animal M099. Then:
 
@@ -120,7 +128,7 @@ bnd up M099_2025_01_01_10_00  # Uploads new files to server
 
 If you want specific things during your pipeline (e.g., dont run kilosort, use a custom channel map) read the API below.
 
-# API
+## API
 
 ## Config
 
