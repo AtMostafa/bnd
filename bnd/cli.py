@@ -17,6 +17,7 @@ from .config import (
     get_last_session,
     list_dirs,
     list_session_datetime,
+    missing_ephys_sessions,
 )
 from .data_transfer import download_session, download_session_light, upload_session
 from .pipeline import _check_processing_dependencies
@@ -235,6 +236,12 @@ def ls(
     animal_name: str = typer.Argument(
         None, help="Animal name: M123. If omitted, list every animal."
     ),
+    missing: bool = typer.Option(
+        False,
+        "-m",
+        "--missing",
+        help="Also show Ephys sessions missing locally.",
+    ),
 ):
     """
     List the sessions available locally.
@@ -242,7 +249,9 @@ def ls(
     \b
     Example usage:
         `bnd ls` lists every animal and its sessions
-        `bnd ls M017` lists the sessions of M017 only
+        `bnd ls M170` lists the sessions of M017 only
+        `bnd ls -m` also flags remote ephys sessions missing locally
+        `bnd ls M170 -m` same, for M017 only
     """
     config = _load_config()
     raw_path = config.LOCAL_PATH / "raw"
@@ -262,11 +271,13 @@ def ls(
     tree = Tree(f"[bold]{raw_path}")
     for animal in animal_names:
         _, sessions = list_session_datetime(raw_path / animal)
+        absent = missing_ephys_sessions(animal, sessions) if missing else []
         branch = tree.add(f"[bold cyan]{animal}[/] [dim]({len(sessions)})")
-        if sessions:
-            for session in sessions:
-                branch.add(session)
-        else:
+        for session in sessions:
+            branch.add(session)
+        for session in absent:
+            branch.add(f"[yellow]{session}[/] [dim](remote-only)")
+        if not sessions and not absent:
             branch.add("[dim]no sessions")
 
     print(tree)
@@ -298,7 +309,7 @@ def batch_ks(animal_list: List[str]):
             for session in session_list:
                 try:
                     dl(session, max_size_MB=0, do_video=False)
-                    to_pyal(session, kilosort_flag=True, custom_map=False)
+                    to_pyal(session, kilosort_flag=True, custom_map=True)
                     up(session)
                     shutil.rmtree(config.LOCAL_PATH / "raw" / animal / session)
                 except Exception as e:

@@ -242,3 +242,19 @@ def get_last_session(animal_path: str | Path) -> str:
     ).is_dir(), f"Session {last_session} not found in {animal_path}"
 
     return last_session
+
+
+def missing_ephys_sessions(animal: str, local_sessions: list[str]) -> list[str]:
+    """Remote ephys sessions (`*_g?` gate folder) for `animal` absent locally."""
+    config = _load_config()
+    remote_animal = config.get_remote_animal_path(animal)
+    if not remote_animal.is_dir():
+        return []  # animal not on the remote
+    have = set(local_sessions)
+    _, remote_sessions = list_session_datetime(remote_animal)
+    return [
+        s
+        for s in remote_sessions
+        if s not in have
+        and config.get_subdirectories_from_pattern(config.get_remote_session_path(s), "*_g?")
+    ]
