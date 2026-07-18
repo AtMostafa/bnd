@@ -3,21 +3,20 @@
 A **lightweight** collection of functions for managing the experimental data recorded in the 
 BeNeuro Lab, and a CLI tool called `bnd` for easy access to this functionality.
 
-Play around with it and raise Github issues if anything fails
+Play around with it and raise Github issues if anything fails.
 
 ## Setting up
-
-### 1. Install `bnd`
-
-#### Option A — uv tool (recommended)
-
-[uv](https://docs.astral.sh/uv/) installs `bnd` in an isolated environment and makes the CLI available system-wide.
 
 > **Upgrading from an older version?** Earlier releases were installed with pipx. Remove that
 > first so the two installs don't shadow each other:
 > ```shell
 > pipx uninstall bnd
 > ```
+
+### 1. Install `bnd`
+
+[uv](https://docs.astral.sh/uv/) installs `bnd` in an isolated environment and makes the CLI available system-wide.
+
 
 1. Install uv if you don't have it:
    ```shell
@@ -62,21 +61,6 @@ uv tool upgrade bnd --reinstall
 `bnd` tracks a git branch rather than a pinned version, so `--reinstall` is needed to make uv
 re-fetch and pick up the newest commits.
 
-#### Option B — conda
-
-1. Install [Miniconda](https://docs.anaconda.com/miniconda/install/#quick-command-line-install) or [Miniforge](https://github.com/conda-forge/miniforge).
-2. Clone the repo and create the environment:
-   ```shell
-   git clone git@github.com:BeNeuroLab/bnd.git
-   cd ./bnd
-   conda env create --file=processing_env.yml   # includes scientific dependencies
-   conda activate bnd
-   pip install -e .
-   ```
-   To update later:
-   ```shell
-   conda env update --file=processing_env.yml
-   ```
 
 ### 2. Set up Kilosort (separate conda env)
 
