@@ -1,4 +1,6 @@
+import platform
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -229,7 +231,8 @@ def dl_light(
 @app.command()
 def ls(
     animal_name: str = typer.Argument(
-        None, help="Animal name: M123. If omitted, list every animal."
+        None,
+        help="Animal name (M123) or session name (M123_2000_02_03_14_15). If omitted, lists every animal.",
     ),
     missing: bool = typer.Option(
         False,
@@ -240,16 +243,29 @@ def ls(
 ):
     """
     List the sessions available locally.
+    If a session name is given instead, show its contents.
 
     \b
     Example usage:
         `bnd ls` lists every animal and its sessions
         `bnd ls M170` lists the sessions of M017 only
+        `bnd ls M170_2024_03_12_18_45` shows that session's files
         `bnd ls -m` also flags remote ephys sessions missing locally
         `bnd ls M170 -m` same, for M017 only
     """
     config = _load_config()
     raw_path = config.LOCAL_PATH / "raw"
+
+    if animal_name is not None and len(animal_name) > 4:  # session name
+        session_path = config.get_local_session_path(animal_name)
+        if not session_path.is_dir():
+            print(f"[red]Session {animal_name} not found in {raw_path}")
+            raise typer.Exit(code=1)
+        if platform.system() == "Windows":
+            subprocess.run("dir", shell=True, cwd=session_path, check=False)
+        else:
+            subprocess.run("du -sh *", shell=True, cwd=session_path, check=False)
+        return
 
     if animal_name is not None:
         animal_path = config.get_local_animal_path(animal_name)
