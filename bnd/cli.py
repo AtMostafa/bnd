@@ -1,10 +1,8 @@
 import shutil
 from pathlib import Path
-from typing import List
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
-
 from rich import print
 from rich.tree import Tree
 
@@ -75,7 +73,6 @@ def to_pyal(
     # Run pipeline
     run_pyaldata_conversion(session_path, kilosort_flag, custom_map)
 
-    return
 
 
 @app.command()
@@ -117,7 +114,6 @@ def to_nwb(
 
     # Run pipeline
     run_nwb_conversion(session_path, kilosort_flag, custom_map)
-    return
 
 
 @app.command()
@@ -141,7 +137,6 @@ def ksort(session_name: str = typer.Argument(help="Session name to kilosort")) -
 
     # Run pipeline
     run_kilosort_on_session(session_path)
-    return
 
 
 # ================================== Data Transfer ========================================
@@ -287,7 +282,7 @@ def ls(
 
 
 @app.command()
-def batch_ks(animal_list: List[str]):
+def batch_ks(animal_list: list[str]):
     """
     Download data from all sessions of every animal in animal_list,
     kilosort,
