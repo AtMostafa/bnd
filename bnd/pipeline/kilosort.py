@@ -5,6 +5,9 @@ import textwrap
 from configparser import ConfigParser
 from pathlib import Path
 
+import typer
+from rich import print
+
 from ..logger import set_logging
 from ..config import Config, _load_config
 from ..config import find_file
@@ -49,11 +52,12 @@ def _run_in_kilosort_env(args: list[str], *, capture: bool = False) -> subproces
         cmd.append("--no-capture-output")
     try:
         return subprocess.run([*cmd, *args], check=True, capture_output=capture, text=capture)
-    except FileNotFoundError as e:
-        raise RuntimeError(
-            "`conda` was not found. Run bnd from a terminal where conda is available "
+    except FileNotFoundError:
+        print(
+            "[red]`conda` was not found. Run bnd from a terminal where conda is available "
             "(i.e. where `conda activate` works)."
-        ) from e
+        )
+        raise typer.Exit(code=1)
 
 
 def _kilosort_cuda() -> tuple[bool, str | None]:
@@ -111,9 +115,8 @@ def _read_probe_type(meta_file_path: str) -> str:
     elif int(probe_type_val) == 2013:
         probe_type = "NeuroPix2_default.mat"  # Neuropixels 2.0
     else:
-        raise ValueError(
-            "Probe type not recogised. It appears to be different from Npx 1.0 or 2.0"
-        )
+        print("[red]Probe type not recogised. It appears to be different from Npx 1.0 or 2.0")
+        raise typer.Exit(code=1)
     return probe_type
 
 
@@ -225,7 +228,8 @@ def run_kilosort_on_recording(
         raw_recording_path = Path(recording_path)
 
     if not recording_path.is_relative_to(config.LOCAL_PATH / "raw"):
-        raise ValueError(f"{recording_path} is not in {config.LOCAL_PATH / 'raw'}")
+        print(f"[red]{recording_path} is not in {config.LOCAL_PATH / 'raw'}")
+        raise typer.Exit(code=1)
 
     probe_paths = config.get_subdirectories_from_pattern(recording_path, "*_imec?")
     for probe_path in probe_paths:
@@ -278,9 +282,10 @@ def run_kilosort_on_session(session_path: Path) -> None:
                 f"CUDA is not available in '{env_name}'. GPU computations will not be enabled."
             )
             if len(ephys_recording_folders) > 1:
-                raise ValueError(
-                    "It seems you are trying to run kilosort without GPU. Look at the README on instrucstions of how to do this. "
+                print(
+                    "[red]It seems you are trying to run kilosort without GPU. Look at the README on instrucstions of how to do this. "
                 )
+                raise typer.Exit(code=1)
 
         for recording_path in ephys_recording_folders:
             logger.info(f"Processing recording: {recording_path.name}")

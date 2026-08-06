@@ -2,6 +2,9 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+import typer
+from rich import print
+
 from .logger import set_logging
 
 logger = set_logging(__name__)
@@ -52,12 +55,18 @@ def _check_is_git_track(repo_path):
 
 
 def _check_root(root_path: Path):
-    assert root_path.exists(), f"{root_path} does not exist."
-    assert root_path.is_dir(), f"{root_path} is not a directory."
+    if not root_path.exists():
+        print(f"[red]{root_path} does not exist.")
+        raise typer.Exit(code=1)
+    if not root_path.is_dir():
+        print(f"[red]{root_path} is not a directory.")
+        raise typer.Exit(code=1)
 
     files_in_root = [f.stem for f in root_path.iterdir()]
 
-    assert "raw" in files_in_root, f"No raw folder in {root_path}"
+    if "raw" not in files_in_root:
+        print(f"[red]No raw folder in {root_path}")
+        raise typer.Exit(code=1)
 
 
 class Config:
@@ -167,7 +176,8 @@ def _load_config() -> Config:
     Loads the configuration settings from the .env file and returns it as a Config object.
     """
     if not _get_env_path().exists():
-        raise FileNotFoundError("Config file not found. Run `bnd init` to create one.")
+        print("[red]Config file not found. Run `bnd init` to create one.")
+        raise typer.Exit(code=1)
 
     return Config()
 
@@ -180,7 +190,8 @@ def find_file(path: str | Path, extension: tuple[str] = ('.raw.kwd',)) -> list[P
     """
     p = Path(path)
     if not p.exists():
-        raise FileNotFoundError(f"Path does not exist: {p}")
+        print(f"[red]Path does not exist: {p}")
+        raise typer.Exit(code=1)
 
     # Convert extension to list if it is a string.
     if isinstance(extension, str):

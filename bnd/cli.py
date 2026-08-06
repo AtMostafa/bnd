@@ -168,7 +168,8 @@ def up(
         last_session = get_last_session(config.LOCAL_PATH / "raw" / session_or_animal_name)
         upload_session(last_session)
     else:
-        raise ValueError("Input must be either a session or an animal name.")
+        print("[red]Input must be either a session or an animal name.")
+        raise typer.Exit(code=1)
 
 
 @app.command()
