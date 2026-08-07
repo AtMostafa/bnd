@@ -262,10 +262,12 @@ def ls(
         if not session_path.is_dir():
             print(f"[red]Session {animal_name} not found in {raw_path}")
             raise typer.Exit(code=1)
+        
+        print(f"[green]Session path: {session_path}")
         if platform.system() == "Windows":
-            subprocess.run("dir", shell=True, cwd=session_path, check=False)
+            subprocess.run(r"dir /b", shell=True, cwd=session_path, check=False)
         else:
-            subprocess.run("du -sh *", shell=True, cwd=session_path, check=False)
+            subprocess.run(r"du -sh *", shell=True, cwd=session_path, check=False)
         return
 
     if animal_name is not None:
