@@ -365,7 +365,7 @@ def ks(
                 to_pyal(session, kilosort_flag=True, custom_map=True)
                 up(session)
                 shutil.rmtree(local_session_path, ignore_errors=True)
-                dl_light(session)
+                dl_light(session, max_size_MB=0)
             except Exception as e:
                 print(f"[red]Error processing {session}: {e}")
                 errors.append((session, str(e)))
