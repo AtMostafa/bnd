@@ -6,7 +6,6 @@ from typing import Annotated
 
 import typer
 from rich import print
-from rich.tree import Tree
 
 from .config import (
     _check_root,
@@ -20,6 +19,7 @@ from .config import (
     missing_ephys_sessions,
 )
 from .data_transfer import download_session, download_session_light, upload_session
+from .display import confirm, print_session_tree
 from .pipeline import _check_processing_dependencies
 from .update_bnd import check_for_updates, update_bnd
 
@@ -282,19 +282,14 @@ def ls(
             print(f"[yellow]No animals found in {raw_path}")
             return
 
-    tree = Tree(f"[bold]{raw_path}")
+    animals_tree_data: dict[str, tuple[int, list[str]]] = {}
     for animal in animal_names:
         _, sessions = list_session_datetime(raw_path / animal)
         absent = missing_ephys_sessions(animal, sessions) if missing else []
-        branch = tree.add(f"[bold cyan]{animal}[/] [dim]({len(sessions)})")
-        for session in sessions:
-            branch.add(session)
-        for session in absent:
-            branch.add(f"[yellow]{session}[/] [dim](remote-only)")
-        if not sessions and not absent:
-            branch.add("[dim]no sessions")
+        leaves = list(sessions) + [f"[yellow]{s}[/] [dim](remote-only)" for s in absent]
+        animals_tree_data[animal] = (len(sessions), leaves)
 
-    print(tree)
+    print_session_tree(f"[bold]{raw_path}", animals_tree_data)
 
 
 # =================================== Batch ==========================================
@@ -346,9 +341,20 @@ def ks(
     if not pending_sessions:
         print("[yellow]No sessions need kilosorting.")
     else:
-        print(f"[green]Found {len(pending_sessions)} session(s) to kilosort:")
+        sessions_by_animal: dict[str, list[str]] = {}
         for session in pending_sessions:
-            print(f"  - {session}")
+            sessions_by_animal.setdefault(session[:4], []).append(session)
+
+        animals_tree_data = {
+            animal: (len(sessions), sessions) for animal, sessions in sessions_by_animal.items()
+        }
+        print_session_tree(
+            f"[bold green]{len(pending_sessions)} session(s) pending kilosort", animals_tree_data
+        )
+
+        if not confirm("\nProceed with kilosorting these sessions (y/n)? "):
+            print("[yellow]Aborted.")
+            raise typer.Exit(code=0)
 
         for session in pending_sessions:
             animal = session[:4]
