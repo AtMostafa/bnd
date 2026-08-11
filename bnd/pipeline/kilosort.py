@@ -240,6 +240,20 @@ def run_kilosort_on_recording(
     return
 
 
+def needs_kilosort(config: Config, session_name: str) -> bool:
+    """A remote session needs kilosorting if it has no `_ksort` folder and no pyaldata/nwb file yet."""
+    remote_session_path = config.get_remote_session_path(session_name)
+    if not remote_session_path.is_dir():
+        return False
+    if config.get_subdirectories_from_pattern(remote_session_path, "*_ksort"):
+        return False
+    if list(remote_session_path.rglob("*_pyaldata*.mat")):
+        return False
+    if list(remote_session_path.rglob("*.nwb")):
+        return False
+    return True
+
+
 def run_kilosort_on_session(session_path: Path) -> None:
     """
     Entry function to run kilosort4 on a single session recording

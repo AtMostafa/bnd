@@ -201,6 +201,25 @@ Example usage:
 bnd ksort M037_2024_01_01_10_00
 ```
 
+### `bnd ks <targets...>`
+
+Batch-kilosort every not-yet-processed session for one or more animals and/or sessions.
+An animal name (`M123`) expands to all of that animal's sessions on the remote server. A
+session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file.
+
+For every remaining session it downloads the data (no video), runs `to-pyal` with kilosort
+and custom mapping, uploads the results back to the server, then replaces the bulky local
+raw data with a light copy (like `dl-light`). Problematic sessions are skipped and all
+issues are logged in a summary at the end.
+
+Example usage:
+
+```shell
+yes | bnd ks M123 M124  # kilosorts every pending session of M123 and M124
+yes | bnd ks M123_2024_01_01_10_00 M123_2024_01_02_10_00  # kilosorts just that session
+yes | bnd ks M123  # auto-confirm the upload prompts
+```
+
 # TODOs:
 
 - Add `AniposeInterface` in nwb conversion

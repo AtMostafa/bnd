@@ -301,42 +301,78 @@ def ls(
 
 
 @app.command()
-def batch_ks(animal_list: list[str]):
+def ks(
+    targets: list[str] = typer.Argument(
+        help="Animal names (M123) and/or session names (M123_2000_02_03_14_15) to kilosort."
+    ),
+):
     """
-    Download data from all sessions of every animal in animal_list,
-    kilosort,
-    convert to pyal,
-    and upload back to the server.
+    Kilosort every not-yet-processed sessions of the given animals/sessions.
+
+    \b
+    A session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file.
+    For every remaining session: download (no video), convert to pyaldata,
+    upload back to the server, then replace the bulky local raw data with
+    a light copy (like `dl-light`).
 
     \b
     Example usage:
-    `yes` in Linux replies to all the prompts with 'yes'.
-        `yes | bnd batch-ks M123 M124 M125`
+        `yes | bnd ks M123 M124` kilosorts all pending sessions of M123 and M124
+        `yes | bnd ks M123_2000_02_03_14_15 M123_2024_01_01_10_00` kilosorts just that session
     """
+    _check_processing_dependencies()
+    from .pipeline.kilosort import needs_kilosort
+
     config = _load_config()
-    for animal in animal_list:
-        try:
-            assert len(animal) == 4, "Animal name must be 4 characters long"
 
-            _, session_list = list_session_datetime(config.REMOTE_PATH / "raw" / animal)
+    session_names: list[str] = []
+    errors: list[tuple[str, str]] = []
 
-            for session in session_list:
-                try:
-                    dl(session, max_size_MB=0, do_video=False)
-                    to_pyal(session, kilosort_flag=True, custom_map=True)
-                    up(session)
-                    shutil.rmtree(config.LOCAL_PATH / "raw" / animal / session)
-                except Exception as e:
-                    print("Error in session:", session)
-                    print(e)
-                    shutil.rmtree(
-                        config.LOCAL_PATH / "raw" / animal / session, ignore_errors=True
-                    )
-                    continue
-        except AssertionError as e:
-            print("Error:", animal)
-            print(e)
-            continue
+    for target in targets:
+        if len(target) > 4:  # session name
+            session_names.append(target)
+        elif len(target) == 4:  # animal name
+            remote_animal_path = config.get_remote_animal_path(target)
+            if not remote_animal_path.is_dir():
+                errors.append((target, "animal not found on remote"))
+                continue
+            _, sessions = list_session_datetime(remote_animal_path)
+            session_names.extend(sessions)
+        else:
+            errors.append((target, "not a valid animal or session name"))
+
+    pending_sessions = [s for s in session_names if needs_kilosort(config, s)]
+
+    if not pending_sessions:
+        print("[yellow]No sessions need kilosorting.")
+    else:
+        print(f"[green]Found {len(pending_sessions)} session(s) to kilosort:")
+        for session in pending_sessions:
+            print(f"  - {session}")
+
+        for session in pending_sessions:
+            animal = session[:4]
+            local_session_path = config.LOCAL_PATH / "raw" / animal / session
+            print(f"\n[bold cyan]Processing {session}[/]")
+            try:
+                dl(session, max_size_MB=0, do_video=False)
+                to_pyal(session, kilosort_flag=True, custom_map=True)
+                up(session)
+                shutil.rmtree(local_session_path, ignore_errors=True)
+                dl_light(session)
+            except Exception as e:
+                print(f"[red]Error processing {session}: {e}")
+                errors.append((session, str(e)))
+                shutil.rmtree(local_session_path, ignore_errors=True)
+                continue
+
+    print("\n[bold]Done.[/]")
+    if errors:
+        print(f"[red]{len(errors)} issue(s):")
+        for name, reason in errors:
+            print(f"  - {name}: {reason}")
+    else:
+        print("[green]All sessions processed successfully.")
 
 
 # =================================== Updating ==========================================
