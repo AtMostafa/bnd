@@ -302,9 +302,12 @@ def ls(
 
 @app.command()
 def ks(
-    targets: list[str] = typer.Argument(
-        help="Animal names (M123) and/or session names (M123_2000_02_03_14_15) to kilosort."
-    ),
+    targets: Annotated[
+        list[str],
+        typer.Argument(
+            help="Animal names (M123) and/or session names (M123_2000_02_03_14_15) to kilosort."
+        ),
+    ],
 ):
     """
     Kilosort every not-yet-processed sessions of the given animals/sessions.
