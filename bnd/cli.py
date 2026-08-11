@@ -311,6 +311,7 @@ def ks(
 ):
     """
     Kilosort every not-yet-processed sessions of the given animals/sessions.
+    If animal name is given, only ephys sessions will be included.
 
     \b
     A session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file.
@@ -335,11 +336,7 @@ def ks(
         if len(target) > 4:  # session name
             session_names.append(target)
         elif len(target) == 4:  # animal name
-            remote_animal_path = config.get_remote_animal_path(target)
-            if not remote_animal_path.is_dir():
-                errors.append((target, "animal not found on remote"))
-                continue
-            _, sessions = list_session_datetime(remote_animal_path)
+            sessions = missing_ephys_sessions(target, [])
             session_names.extend(sessions)
         else:
             errors.append((target, "not a valid animal or session name"))
