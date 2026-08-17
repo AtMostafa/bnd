@@ -1,12 +1,67 @@
 """This module contains functions for uploading and downloading data to and from the server."""
 
+import os
 import shutil
 from pathlib import Path
 
-from .logger import set_logging
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
+
 from .config import _load_config, list_session_datetime
+from .logger import set_logging
 
 logger = set_logging(__name__)
+
+_COPY_BUF = 8 * 1024 * 1024  # the stdlib default (64 KiB-1 MiB) stalls on high-latency SMB/NFS
+
+
+def _copy_robust(src: Path, dst: Path, *, resume: bool = True) -> None:
+    """Copy `src` to `dst` via a `.part` sibling, resuming a previous partial copy.
+
+    Writing straight to `dst` means an interrupted transfer leaves a truncated file.
+    Data lands in `dst.part` instead and is renamed into place only once its size matches the source.
+    A failed copy raises; the `.part` file is left behind so the next run resumes from it.
+    """
+    tmp = dst.with_name(dst.name + ".part")
+    total = src.stat().st_size
+
+    offset = tmp.stat().st_size if (resume and tmp.exists()) else 0
+    if offset > total:  # source changed
+        offset = 0
+    with Progress(
+        "[progress.description]{task.description}",
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task(src.name, total=total, completed=offset)
+        with open(src, "rb") as fsrc, open(tmp, "r+b" if offset else "wb") as fdst:
+            fsrc.seek(offset)
+            fdst.seek(offset)
+            fdst.truncate(offset)
+            buf = memoryview(bytearray(_COPY_BUF))
+            while n := fsrc.readinto(buf):
+                fdst.write(buf[:n])
+                progress.advance(task, n)
+            fdst.flush()
+            os.fsync(fdst.fileno())
+
+    copied = tmp.stat().st_size
+    if copied != total:
+        raise OSError(f'"{src.name}": copied {copied} of {total} bytes')
+
+    os.replace(tmp, dst)
+    try:
+        shutil.copystat(src, dst)  # best effort: often denied on network mounts
+    except OSError:
+        pass
 
 
 def _upload_file(local_file: Path, remote_file: Path):
@@ -24,10 +79,7 @@ def _upload_file(local_file: Path, remote_file: Path):
 
     # Ensure the destination directory exists
     remote_file.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        shutil.copy2(local_file, remote_file)
-    except PermissionError:
-        shutil.copyfile(local_file, remote_file)
+    _copy_robust(local_file, remote_file)
     logger.info(f'Uploaded "{local_file.name}"')
 
 
@@ -123,10 +175,7 @@ def download_session(session_name: str, file_extension: str, max_size_MB: float,
                 continue
             # Ensure the destination directory exists
             local_file.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                shutil.copy2(file, local_file)
-            except PermissionError:
-                shutil.copyfile(file, local_file)
+            _copy_robust(file, local_file)
             logger.info(f'Downloaded "{file.name}"')
         else:
             logger.info(f'"{file.name}" is too large. Skipping.')
@@ -207,10 +256,7 @@ def download_session_light(session_name: str, max_size_MB: float = 0) -> None:
                 continue
             # Ensure the destination directory exists
             local_file.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                shutil.copy2(file, local_file)
-            except PermissionError:
-                shutil.copyfile(file, local_file)
+            _copy_robust(file, local_file)
             logger.info(f'Downloaded "{file.name}"')
         else:
             logger.info(f'"{file.name}" is too large. Skipping.')
