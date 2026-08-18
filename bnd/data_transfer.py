@@ -17,8 +17,6 @@ from .logger import set_logging
 
 logger = set_logging(__name__)
 
-_COPY_BUF = 8 * 1024 * 1024  # the stdlib default (64 KiB-1 MiB) stalls on high-latency SMB/NFS
-
 
 def _copy_robust(src: Path, dst: Path, *, resume: bool = True) -> None:
     """Copy `src` to `dst` via a `.part` sibling, resuming a previous partial copy.
@@ -27,6 +25,7 @@ def _copy_robust(src: Path, dst: Path, *, resume: bool = True) -> None:
     Data lands in `dst.part` instead and is renamed into place only once its size matches the source.
     A failed copy raises; the `.part` file is left behind so the next run resumes from it.
     """
+    _COPY_BUF = 8 * 1024 * 1024  # the stdlib default (64 KiB-1 MiB) stalls on high-latency SMB/NFS
     tmp = dst.with_name(dst.name + ".part")
     total = src.stat().st_size
 
