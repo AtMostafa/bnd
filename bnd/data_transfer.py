@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import time
 from pathlib import Path
 
 from rich.progress import (
@@ -20,18 +21,16 @@ logger = set_logging(__name__)
 
 def _copy_robust(src: Path, dst: Path, *, resume: bool = True) -> None:
     """Copy `src` to `dst` via a `.part` sibling, resuming a previous partial copy.
-
     Writing straight to `dst` means an interrupted transfer leaves a truncated file.
     Data lands in `dst.part` instead and is renamed into place only once its size matches the source.
-    A failed copy raises; the `.part` file is left behind so the next run resumes from it.
+    A failed copy is retried up to `_MAX_ATTEMPTS` times.
     """
     _COPY_BUF = 8 * 1024 * 1024  # the stdlib default (64 KiB-1 MiB) stalls on high-latency SMB/NFS
-    tmp = dst.with_name(dst.name + ".part")
-    total = src.stat().st_size
+    _SYNC_BYTES = 64 * 1024 * 1024  # force to disk this often; sets the resume granularity
+    _MAX_ATTEMPTS = 3
+    _RETRY_WAIT = 5  # seconds, multiplied by the attempt number
 
-    offset = tmp.stat().st_size if (resume and tmp.exists()) else 0
-    if offset > total:  # source changed
-        offset = 0
+    tmp = dst.with_name(dst.name + ".part")
     with Progress(
         "[progress.description]{task.description}",
         BarColumn(),
@@ -40,21 +39,43 @@ def _copy_robust(src: Path, dst: Path, *, resume: bool = True) -> None:
         TimeRemainingColumn(),
         transient=True,
     ) as progress:
-        task = progress.add_task(src.name, total=total, completed=offset)
-        with open(src, "rb") as fsrc, open(tmp, "r+b" if offset else "wb") as fdst:
-            fsrc.seek(offset)
-            fdst.seek(offset)
-            fdst.truncate(offset)
-            buf = memoryview(bytearray(_COPY_BUF))
-            while n := fsrc.readinto(buf):
-                fdst.write(buf[:n])
-                progress.advance(task, n)
-            fdst.flush()
-            os.fsync(fdst.fileno())
+        task = progress.add_task(src.name, total=None)
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            try:
+                total = src.stat().st_size
+                keep_part = resume or attempt > 1
+                offset = tmp.stat().st_size if (keep_part and tmp.exists()) else 0
+                if offset > total:  # source changed
+                    offset = 0
+                progress.update(task, total=total, completed=offset)
 
-    copied = tmp.stat().st_size
-    if copied != total:
-        raise OSError(f'"{src.name}": copied {copied} of {total} bytes')
+                with open(src, "rb") as fsrc, open(tmp, "r+b" if offset else "wb") as fdst:
+                    fsrc.seek(offset)
+                    fdst.seek(offset)
+                    fdst.truncate(offset)
+                    unsynced = 0
+                    buf = memoryview(bytearray(_COPY_BUF))
+                    while n := fsrc.readinto(buf):
+                        fdst.write(buf[:n])
+                        progress.advance(task, n)
+                        unsynced += n
+                        if unsynced >= _SYNC_BYTES:
+                            fdst.flush()
+                            os.fsync(fdst.fileno())
+                            unsynced = 0
+                    fdst.flush()
+                    os.fsync(fdst.fileno())
+
+                copied = tmp.stat().st_size
+                if copied != total:
+                    raise OSError(f'"{src.name}": copied {copied} of {total} bytes')
+            except OSError as err:
+                if attempt >= _MAX_ATTEMPTS:
+                    raise OSError(f'"{src.name}": copy failed after {_MAX_ATTEMPTS} attempts') from err
+                logger.warning(f'"{src.name}": {err}. Retrying ({attempt + 1}/{_MAX_ATTEMPTS})...')
+                time.sleep(_RETRY_WAIT)
+            else:
+                break
 
     os.replace(tmp, dst)
     try:
