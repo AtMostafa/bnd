@@ -1,5 +1,4 @@
 import platform
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Annotated
@@ -20,7 +19,7 @@ from .config import (
     missing_ephys_sessions,
 )
 from .data_transfer import download_session, download_session_light, upload_session
-from .display import confirm, print_session_tree
+from .display import print_session_tree
 from .pipeline import _check_processing_dependencies
 
 # Create a Typer app
@@ -320,65 +319,9 @@ def ks(
         `yes | bnd ks M123_2000_02_03_14_15 M123_2024_01_01_10_00` kilosorts just that session
     """
     _check_processing_dependencies()
-    from .pipeline.kilosort import needs_kilosort
+    from .pipeline.batch import run_kilosort_batch
 
-    config = _load_config()
-
-    session_names: list[str] = []
-    errors: list[tuple[str, str]] = []
-
-    for target in targets:
-        if len(target) > 4:  # session name
-            session_names.append(target)
-        elif len(target) == 4:  # animal name
-            sessions = missing_ephys_sessions(target, [])
-            session_names.extend(sessions)
-        else:
-            errors.append((target, "not a valid animal or session name"))
-
-    pending_sessions = [s for s in session_names if needs_kilosort(config, s)]
-
-    if not pending_sessions:
-        print("[yellow]No sessions need kilosorting.")
-    else:
-        sessions_by_animal: dict[str, list[str]] = {}
-        for session in pending_sessions:
-            sessions_by_animal.setdefault(session[:4], []).append(session)
-
-        animals_tree_data = {
-            animal: (len(sessions), sessions) for animal, sessions in sessions_by_animal.items()
-        }
-        print_session_tree(
-            f"[bold green]{len(pending_sessions)} session(s) pending kilosort", animals_tree_data
-        )
-
-        if not confirm("\nProceed with kilosorting these sessions (y/n)? "):
-            print("[yellow]Aborted.")
-            raise typer.Exit(code=0)
-
-        for session in pending_sessions:
-            animal = session[:4]
-            local_session_path = config.LOCAL_PATH / "raw" / animal / session
-            print(f"\n[bold cyan]Processing {session}[/]")
-            try:
-                dl(session, max_size_MB=0, do_video=False)
-                to_pyal(session, kilosort_flag=True, custom_map=True)
-                up(session)
-                shutil.rmtree(local_session_path, ignore_errors=True)
-                dl_light(session, max_size_MB=0)
-            except Exception as e:
-                print(f"[red]Error processing {session}: {e}")
-                errors.append((session, str(e)))
-                shutil.rmtree(local_session_path, ignore_errors=True)
-                continue
-
-    print("\n[bold]Done.[/]")
-    if errors:
-        print(f"[red]{len(errors)} issue(s):")
-        for name, reason in errors:
-            print(f"  - {name}: {reason}")
-    else:
-        print("[green]All sessions processed successfully.")
+    run_kilosort_batch(targets)
 
 
 # =================================== Config ============================================
