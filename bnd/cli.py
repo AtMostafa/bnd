@@ -13,6 +13,7 @@ from .config import (
     _get_env_path,
     _get_package_path,
     _load_config,
+    check_config,
     get_last_session,
     list_dirs,
     list_session_datetime,
@@ -412,23 +413,6 @@ def show_config():
     print(f"bnd source code is at {_get_package_path()}", end="\n\n")
     for attr, value in config.__dict__.items():
         print(f"{attr}: {value}")
-
-
-@app.command()
-def check_config():
-    """
-    Check that the local and remote root folders have the expected raw and processed folders.
-    """
-    config = _load_config()
-
-    print(
-        "Checking that local and remote root folders have the expected raw and processed folders..."
-    )
-
-    _check_root(config.LOCAL_PATH)
-    _check_root(config.REMOTE_PATH)
-
-    print("[green]Config looks good.")
 
 
 @app.command()

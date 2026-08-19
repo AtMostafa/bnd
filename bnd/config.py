@@ -255,6 +255,20 @@ def get_last_session(animal_path: str | Path) -> str:
     return last_session
 
 
+def check_config() -> None:
+    """Check that the local and remote root folders have the expected raw and processed folders."""
+    config = _load_config()
+
+    print(
+        "Checking that local and remote root folders have the expected raw and processed folders..."
+    )
+
+    _check_root(config.LOCAL_PATH)
+    _check_root(config.REMOTE_PATH)
+
+    print("[green]Config looks good.")
+
+
 def missing_ephys_sessions(animal: str, local_sessions: list[str]) -> list[str]:
     """Remote ephys sessions (`*_g?` gate folder) for `animal` absent locally."""
     config = _load_config()
