@@ -1,9 +1,7 @@
-# bnd : BeNeuroLab Data Organization
+# bnd : Behavioural & Neural Data
 
-A **lightweight** collection of functions for managing the experimental data recorded in the 
-BeNeuro Lab, and a CLI tool called `bnd` for easy access to this functionality.
+A **lightweight** collection of functions for managing the experimental neuroscience data. A CLI tool called `bnd` for easy access in the terminal.
 
-Play around with it and raise Github issues if anything fails.
 
 ## Setting up
 
@@ -58,8 +56,7 @@ To **update** to the latest commits:
 conda deactivate
 uv tool upgrade bnd --reinstall
 ```
-`bnd` tracks a git branch rather than a pinned version, so `--reinstall` is needed to make uv
-re-fetch and pick up the newest commits.
+`bnd` tracks a git branch rather than a pinned version, so `--reinstall` is needed to make uv re-fetch and pick up the newest commits.
 
 
 ### 2. Set up Kilosort (separate conda env)
@@ -116,6 +113,10 @@ If you want specific things during your pipeline (e.g., dont run kilosort, use a
 
 ## Config
 
+### `bnd --version` / `bnd -v`
+
+Print the upstream repo URL and the installed `bnd` version, then exit.
+
 ### `bnd init`
 
 Create a .env file (if there isnt one) to store the paths to the local and remote data storage.
@@ -147,6 +148,37 @@ Example usage to download everything:
 bnd dl M017_2024_03_12_18_45 -v  # will download everything, including videos
 bnd dl M017_2024_03_12_18_45  # will download everything, except videos
 bnd dl M017_2024_03_12_18_45 --max-size=50  # will download files smaller than 50MB
+```
+
+### `bnd dl-light <session>`
+
+Download a session, like `dl`, but always skipping bulky raw data: video files, SpikeGLX
+data files (`..._g?_...`, except their `*.meta`), anything inside a `..._ksort` folder, and
+anything inside a `..._camera`/`..._cameras` folder.
+
+Example usage:
+
+```shell
+bnd dl-light M017_2024_03_12_18_45  # downloads everything except the bulky raw data
+bnd dl-light M017_2024_03_12_18_45 --max-size=50  # also skip any remaining file bigger than 50MB
+```
+
+## Listing
+
+### `bnd ls [animal_or_session] [-m]`
+
+List the sessions available locally for one animal or all of them. If a full session name is
+given instead, show that session's file sizes. Pass `-m`/`--missing` to also flag ephys
+sessions (with a SpikeGLX `_g?` gate folder) that exist on the remote server but not locally.
+
+Example usage:
+
+```shell
+bnd ls  # lists every animal and its sessions
+bnd ls M170  # lists the sessions of M170 only
+bnd ls M170_2024_03_12_18_45  # shows that session's files
+bnd ls -m  # also flags remote ephys sessions missing locally
+bnd ls M170 -m  # same, for M170 only
 ```
 
 ## Pipeline

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bnd"
-version = "0.1.10.1"
-description = "BeNeuro data pipeline CLI"
+version = "0.2"
+description = "Behavioural & neural data pipeline CLI"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
