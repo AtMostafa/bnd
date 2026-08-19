@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from importlib.metadata import metadata, version
 from pathlib import Path
 
 import typer
@@ -8,6 +9,27 @@ from rich import print
 from .logger import set_logging
 
 logger = set_logging(__name__)
+
+
+def get_version() -> str:
+    """
+    Returns the installed version of bnd.
+    """
+    return version("bnd")
+
+
+def get_repo_url() -> str | None:
+    """
+    Returns the upstream repo URL from package metadata, if available.
+    """
+    return next(
+        (
+            url.split(", ", 1)[1]
+            for url in metadata("bnd").get_all("Project-URL") or []
+            if url.startswith("Repository")
+        ),
+        None,
+    )
 
 
 def _get_package_path() -> Path:

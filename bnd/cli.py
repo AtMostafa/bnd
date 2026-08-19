@@ -14,6 +14,8 @@ from .config import (
     _load_config,
     check_config,
     get_last_session,
+    get_repo_url,
+    get_version,
     list_dirs,
     list_session_datetime,
     missing_ephys_sessions,
@@ -26,6 +28,29 @@ from .pipeline import _check_processing_dependencies
 app = typer.Typer(
     add_completion=False,  # Disable the auto-completion options
 )
+
+
+def _version_callback(show_version: bool) -> None:
+    if show_version:
+        repo_url = get_repo_url()
+        if repo_url:
+            print(f"[link={repo_url}]{repo_url}")
+        print(f"bnd {get_version()}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-v",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the bnd version and exit.",
+    ),
+) -> None:
+    pass
 
 
 # ============================== Pipeline functions =======================================
@@ -333,6 +358,7 @@ def show_config():
     Show the contents of the config file.
     """
     config = _load_config()
+    print(f"bnd version {get_version()}")
     print(f"bnd source code is at {_get_package_path()}", end="\n\n")
     for attr, value in config.__dict__.items():
         print(f"{attr}: {value}")

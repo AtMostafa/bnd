@@ -26,8 +26,7 @@ processing = [
     # -- data I/O & NWB ------------------------------------------------------
     # These neuroscience packages still ship breaking API changes between minor
     # releases (e.g. spikeinterface dropped `load_sync_channel`), so they are
-    # pinned to the known-good minor line. Lower bound = last version verified
-    # to work end-to-end; upper bound = next minor, where breaking changes land.
+    # pinned to the known-good minor line.
     "pynwb>=3.1.3,<4",
     "ndx-pose>=0.3.0,<0.4",
     "neuroconv>=0.9.3,<0.10",
@@ -56,8 +55,8 @@ dev = [
 bnd = "bnd.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/BeNeuroLab/bnd"
-Repository = "https://github.com/BeNeuroLab/bnd"
+Homepage = "https://github.com/AtMostafa/bnd"
+Repository = "https://github.com/AtMostafa/bnd"
 
 [tool.hatch.build.targets.wheel]
 packages = ["bnd"]
