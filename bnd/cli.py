@@ -22,7 +22,6 @@ from .config import (
 from .data_transfer import download_session, download_session_light, upload_session
 from .display import confirm, print_session_tree
 from .pipeline import _check_processing_dependencies
-from .update_bnd import check_for_updates, update_bnd
 
 # Create a Typer app
 app = typer.Typer(
@@ -380,25 +379,6 @@ def ks(
             print(f"  - {name}: {reason}")
     else:
         print("[green]All sessions processed successfully.")
-
-
-# =================================== Updating ==========================================
-
-
-@app.command()
-def check_updates():
-    """
-    Check if there are any new commits on the repo's main branch.
-    """
-    check_for_updates()
-
-
-@app.command()
-def self_update():
-    """
-    Update the bnd tool by pulling the latest commits from the repo's main branch.
-    """
-    update_bnd()
 
 
 # =================================== Config ============================================

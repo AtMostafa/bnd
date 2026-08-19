@@ -124,16 +124,6 @@ Create a .env file (if there isnt one) to store the paths to the local and remot
 
 Show the contents of the config file.
 
-## Updating
-
-### `bnd check-updates`
-
-Check if there are any new commits on the repo's main branch.
-
-### `bnd self-update`
-
-Update the bnd tool by pulling the latest commits from the repo's main branch.
-
 ## Data Transfer
 
 ### `bnd up <session_or_animal_name>`
