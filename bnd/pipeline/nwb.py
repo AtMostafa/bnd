@@ -75,16 +75,25 @@ def _try_adding_kilosort_to_source_data(
 def _try_adding_anipose_to_source_data(source_data: dict, session_path: Path):
     csv_paths = list(session_path.glob("**/*3dpts_angles.csv"))
 
-    if len(csv_paths) == 0:
-        logger.warning("No pose estimation data found.")
-        return
-
     if len(csv_paths) > 1:
-        raise FileExistsError(
-            f"More than one pose estimation csv file " f"found: {csv_paths}"
-        )
+            raise FileExistsError(
+                f"More than one pose estimation csv file " f"found: {csv_paths}"
+            )
+    
+    if len(csv_paths) == 0:
+        logger.warning("No 3D pose estimation data found. Looking for 2D")
+        
+        h5_paths = list(session_path.glob("**/*.h5"))
+        if len(h5_paths) == 0:
+            logger.warning("No 2D pose estimation data found.")
+            return
+        else:
+            logger.info("Found 2D pose estimation data.")
+            # Do something with the 2D data, e.g., load it and add it to the source_data
+            csv_path = h5_paths[0]
 
-    csv_path = csv_paths[0]
+    else:
+        csv_path = csv_paths[0]
     try:
         AniposeInterface(csv_path)
     except Exception as e:

@@ -53,11 +53,49 @@ class AniposeInterface(BaseTemporalAlignmentInterface):
         ("left_wrist_angle", ["left_elbow", "left_wrist", "left_paw"]),
     )
 
+    cameras2d = (
+        ('Camera_Top_Left', 
+        [
+            "shoulder_center", 
+            "left_shoulder",
+            "hip_center",
+            "left_knee",
+            "left_ankle",
+            "left_foot",
+            "tail_base",
+            "tail_middle",
+            "tail_tip"
+        ]
+        ),
+
+        ('Camera_Side_Right',  
+        [
+            "shoulder_center",
+            "right_shoulder",
+            "right_elbow",
+            "right_paw",
+            "hip_center",
+            "right_knee",
+            "right_ankle",
+            "right_foot",
+            "tail_base",
+            "tail_middle",
+            "right_wrist"
+        ]
+        )
+    )
+
+
+
     def __init__(self, csv_path: Path):
         super().__init__()
 
         self.csv_path = Path(csv_path)
-        self.pose_data = self.load_anipose_from_csv()
+        if self.csv_path.suffix == ".csv":
+            self.pose_data = self.load_anipose_from_csv()
+        else:
+            self.h5_path = Path(csv_path).parent.parent
+            self.pose_data = None
 
     def _add_to_behavior_module(self, beh_obj, nwbfile: NWBFile) -> None:
         behavior_module = nwbfile.processing.get("behavior")
@@ -100,42 +138,63 @@ class AniposeInterface(BaseTemporalAlignmentInterface):
             rate = None
 
         keypoint_series_objects = []
-        for keypoint_name in self.keypoint_names:
-            keypoint_series = PoseEstimationSeries(
-                name=keypoint_name,
-                description=f"Marker placed at {keypoint_name.replace('_', ' ')}",
-                data=self.pose_data[
-                    [f"{keypoint_name}_x", f"{keypoint_name}_y", f"{keypoint_name}_z"]
-                ].to_numpy(),
-                unit="mm",
-                reference_frame="(0, 0, 0) is hip_center's median across all frames",
-                timestamps=timestamps,
-                starting_time=starting_time,
-                rate=rate,
-                confidence=np.full(self.n_frames, np.nan),
-                confidence_definition="Filled with nan because we don't have an estimate.",
-            )
-            keypoint_series_objects.append(keypoint_series)
+        if self.pose_data is not None:
+            for keypoint_name in self.keypoint_names:
+                keypoint_series = PoseEstimationSeries(
+                    name=keypoint_name,
+                    description=f"Marker placed at {keypoint_name.replace('_', ' ')}",
+                    data=self.pose_data[
+                        [f"{keypoint_name}_x", f"{keypoint_name}_y", f"{keypoint_name}_z"]
+                    ].to_numpy(),
+                    unit="mm",
+                    reference_frame="(0, 0, 0) is hip_center's median across all frames",
+                    timestamps=timestamps,
+                    starting_time=starting_time,
+                    rate=rate,
+                    confidence=np.full(self.n_frames, np.nan),
+                    confidence_definition="Filled with nan because we don't have an estimate.",
+                )
+                keypoint_series_objects.append(keypoint_series)
 
-        for angle_name, angle_reference in self.angle_names_and_references:
-            angle_array = self.pose_data[[f"{angle_name}"]].to_numpy()
-            angle_series = PoseEstimationSeries(
-                name=angle_name,
-                data=np.concatenate(
-                    (angle_array, np.zeros((angle_array.shape[0], 1))), axis=1
-                ),
-                description="Angle information. Second dimension is zeros since since minimum"
-                " 2D array is needed for PoseEstimationSeries",
-                unit="degrees",
-                reference_frame=f"Triangulation of keypoints: {angle_reference}",
-                timestamps=timestamps,
-                starting_time=starting_time,
-                rate=rate,
-                confidence=np.full(self.n_frames, np.nan),
-                confidence_definition="Filled with nan because we don't have an estimate.",
-            )
-            keypoint_series_objects.append(angle_series)
+            for angle_name, angle_reference in self.angle_names_and_references:
+                angle_array = self.pose_data[[f"{angle_name}"]].to_numpy()
+                angle_series = PoseEstimationSeries(
+                    name=angle_name,
+                    data=np.concatenate(
+                        (angle_array, np.zeros((angle_array.shape[0], 1))), axis=1
+                    ),
+                    description="Angle information. Second dimension is zeros since minimum"
+                    " 2D array is needed for PoseEstimationSeries",
+                    unit="degrees",
+                    reference_frame=f"Triangulation of keypoints: {angle_reference}",
+                    timestamps=timestamps,
+                    starting_time=starting_time,
+                    rate=rate,
+                    confidence=np.full(self.n_frames, np.nan),
+                    confidence_definition="Filled with nan because we don't have an estimate.",
+                )
+                keypoint_series_objects.append(angle_series)
 
+        else:
+            for camera, keypoints in self.cameras2d:
+                pose_data, conf_scores = self.load_anipose_from_h5(camera) 
+                for idx,keypoint_name in enumerate(self.keypoint_names):
+                    if keypoint_name not in keypoints:
+                        continue
+                    keypoint_series = PoseEstimationSeries(
+                                    name=f"{keypoint_name}_{camera}",
+                                    description=f"Marker placed at {keypoint_name.replace('_', ' ')} from {camera}",
+                                    data=pose_data[:,idx,:].transpose(1, 0), 
+                                    unit="mm",
+                                    reference_frame="(0, 0, 0) is hip_center's median across all frames",
+                                    timestamps=timestamps,
+                                    starting_time=starting_time,
+                                    rate=rate,
+                                    confidence=conf_scores[idx,:],
+                                    confidence_definition="SLEAP confidence scores",
+                                )	
+                    keypoint_series_objects.append(keypoint_series)
+             
         pose_estimation = PoseEstimation(
             name="Pose estimation",
             pose_estimation_series=keypoint_series_objects,
@@ -144,7 +203,7 @@ class AniposeInterface(BaseTemporalAlignmentInterface):
 
         self._add_to_behavior_module(pose_estimation, nwbfile)
 
-    def load_anipose_from_h5(self) -> np.ndarray:
+    def load_anipose_from_h5(self, camera = None) -> np.ndarray:
         """
         Load the array containing the pose estimation from the HDF5 output of sleap-anipose
         """
@@ -154,11 +213,26 @@ class AniposeInterface(BaseTemporalAlignmentInterface):
             DeprecationWarning,
             stacklevel=2,
         )
-        with h5py.File(self.h5_path, "r") as file:
-            assert file["tracks"].shape[1] == 1
-            pose_data = file["tracks"][:, 0, :, :]
+        if camera is not None:
+            h5_dir = self.h5_path / camera
+            files = list(h5_dir.glob("*.h5"))
+            if len(files) == 0:
+                raise FileNotFoundError(f"No .h5 files found for {camera} in {h5_dir}")
+            elif len(files) > 1:
+                raise FileExistsError(
+                    f"More than one .h5 file found for {camera} in {h5_dir}"
+                )
+            h5_path = files[0] 
+        else:
+            h5_path = self.h5_path 
+        with h5py.File(str(h5_path), "r") as file:
+    
+            assert file["tracks"].shape[0] == 1 and file["point_scores"].shape[0] == 1, ('Unexpected shape of tracks and point_scores')
+            pose_data = file["tracks"][0, :, :, :]
+            scores = file["point_scores"][0,:,:] 
+                        
 
-        return pose_data
+        return pose_data, scores
 
     def load_anipose_from_csv(self) -> pd.DataFrame:
         """

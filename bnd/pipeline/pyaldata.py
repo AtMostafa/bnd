@@ -242,6 +242,9 @@ def _parse_pose_estimation_series(
     elif pose_est_series.data[:].shape[1] == 2 and all(pose_est_series.data[:, 1] == 0):
         # If this is true we assume we are dealing with angle data
         colnames = ["angle"]
+    elif pose_est_series.data[:].shape[1] == 2:
+        # If this is true we assume we are dealing with 2D data
+        colnames = ["x", "y"]
     else:
         raise ValueError(
             f"Shape {pose_est_series.data[:].shape} is not supported by pynwb."
@@ -638,7 +641,7 @@ class ParsedNWBFile:
                     new_data_column=anipose_key,
                     df_to_add_from=anipose_value,
                     columns_to_read_from=(
-                        "angle" if "angle" in anipose_key else ["x", "y", "z"]
+                        "angle" if "angle" in anipose_key else ["x", "y", "z"] if "z" in anipose_key else ["x", "y"]
                     ),
                     timestamp_column=None,
                 )
@@ -835,7 +838,7 @@ class ParsedNWBFile:
             path_to_save = (
                 self.nwbfile_path.parent / f"{self.nwbfile_path.parent.name}_pyaldata.mat"
             )
-            scipy.io.savemat(path_to_save, {"pyaldata": data_array})
+            scipy.io.savemat(path_to_save, {"pyaldata": data_array}, long_field_names=True)
             return
         else:
             # Partition array
@@ -860,7 +863,7 @@ class ParsedNWBFile:
                     self.nwbfile_path.parent
                     / f"{self.nwbfile_path.parent.name}_pyaldata_{i}.mat"
                 )
-                scipy.io.savemat(path_to_save, {"pyaldata": arr_partition})
+                scipy.io.savemat(path_to_save, {"pyaldata": arr_partition}, long_field_names=True)
 
             return
 
