@@ -124,17 +124,17 @@ class AniposeInterface(BaseTemporalAlignmentInterface):
                     if keypoint_name not in keypoints:
                         continue
                     keypoint_series = PoseEstimationSeries(
-                                    name=f"{keypoint_name}_{camera}",
-                                    description=f"Marker placed at {keypoint_name.replace('_', ' ')} from {camera}",
-                                    data=pose_data[:,idx,:].transpose(1, 0), 
-                                    unit="mm",
-                                    reference_frame="(0, 0, 0) is hip_center's median across all frames",
-                                    timestamps=timestamps,
-                                    starting_time=starting_time,
-                                    rate=rate,
-                                    confidence=conf_scores[idx,:],
-                                    confidence_definition="SLEAP confidence scores",
-                                )	
+                        name=f"{camera.lower()}_{keypoint_name.lower()}",
+                        description=f"Marker placed at {keypoint_name.replace('_', ' ')} from {camera}",
+                        data=pose_data[:,idx,:].transpose(1, 0), 
+                        unit="mm",
+                        reference_frame="(0, 0, 0) is hip_center's median across all frames",
+                        timestamps=timestamps,
+                        starting_time=starting_time,
+                        rate=rate,
+                        confidence=conf_scores[idx,:],
+                        confidence_definition="SLEAP confidence scores",
+                    )	
                     keypoint_series_objects.append(keypoint_series)
              
         pose_estimation = PoseEstimation(

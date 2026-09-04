@@ -244,7 +244,7 @@ def _parse_pose_estimation_series(
         colnames = ["angle"]
     elif pose_est_series.data[:].shape[1] == 2:
         # If this is true we assume we are dealing with 2D data
-        colnames = ["x", "y"]
+        colnames = ["x", "y", "conf"]
     else:
         raise ValueError(
             f"Shape {pose_est_series.data[:].shape} is not supported by pynwb."
@@ -253,7 +253,10 @@ def _parse_pose_estimation_series(
 
     df = pd.DataFrame()
     for i, col in enumerate(colnames):
-        df[col] = pose_est_series.data[:, i]
+        if "conf" not in col:
+            df[col] = pose_est_series.data[:, i]
+        else:
+            df[col] = pose_est_series.confidence
 
     timestamps = np.arange(pose_est_series.data[:].shape[0])
     timestamps = timestamps / pose_est_series.rate + pose_est_series.starting_time
@@ -636,13 +639,17 @@ class ParsedNWBFile:
                 self.pyaldata_df[anipose_key] = np.nan
 
                 # Add data
+                good_cols = ("angle"
+                        if "angle" in anipose_value.columns 
+                        else ["x", "y", "z"] if "z" in anipose_value.columns 
+                        else ["x", "y", "conf"] if "conf" in anipose_value.columns
+                        else []
+                    )
                 self.pyaldata_df = _add_data_to_trial(
                     df_to_add_to=self.pyaldata_df,
                     new_data_column=anipose_key,
                     df_to_add_from=anipose_value,
-                    columns_to_read_from=(
-                        "angle" if "angle" in anipose_key else ["x", "y", "z"] if "z" in anipose_key else ["x", "y"]
-                    ),
+                    columns_to_read_from=good_cols,
                     timestamp_column=None,
                 )
 
