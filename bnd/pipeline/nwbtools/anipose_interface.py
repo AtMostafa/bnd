@@ -13,6 +13,7 @@ from neuroconv.utils import DeepDict
 from pynwb import NWBFile
 
 from ...logger import set_logging
+from . import _load_pose_config
 
 logger = set_logging(__name__)
 
@@ -20,72 +21,13 @@ logger = set_logging(__name__)
 class AniposeInterface(BaseTemporalAlignmentInterface):
     DEFAULT_FPS = 100
 
-    keypoint_names = (
-        "shoulder_center",
-        "left_shoulder",
-        "left_paw",
-        "right_shoulder",
-        "right_elbow",
-        "right_paw",
-        "hip_center",
-        "left_knee",
-        "left_ankle",
-        "left_foot",
-        "right_knee",
-        "right_ankle",
-        "right_foot",
-        "tail_base",
-        "tail_middle",
-        "tail_tip",
-        "left_elbow",
-        "left_wrist",
-        "right_wrist",
-    )
-
-    angle_names_and_references = (
-        ("left_elbow_angle", ["left_shoulder", "left_elbow", "left_wrist"]),
-        ("right_elbow_angle", ["right_shoulder", "right_elbow", "right_wrist"]),
-        ("left_knee_angle", ["hip_center", "left_knee", "left_ankle"]),
-        ("right_knee_angle", ["hip_center", "right_knee", "right_ankle"]),
-        ("left_ankle_angle", ["left_knee", "left_ankle", "left_foot"]),
-        ("right_ankle_angle", ["right_knee", "right_ankle", "right_foot"]),
-        ("right_wrist_angle", ["right_elbow", "right_wrist", "right_paw"]),
-        ("left_wrist_angle", ["left_elbow", "left_wrist", "left_paw"]),
-    )
-
-    cameras2d = (
-        ('Camera_Top_Left', 
-        [
-            "shoulder_center", 
-            "left_shoulder",
-            "hip_center",
-            "left_knee",
-            "left_ankle",
-            "left_foot",
-            "tail_base",
-            "tail_middle",
-            "tail_tip"
-        ]
-        ),
-
-        ('Camera_Side_Right',  
-        [
-            "shoulder_center",
-            "right_shoulder",
-            "right_elbow",
-            "right_paw",
-            "hip_center",
-            "right_knee",
-            "right_ankle",
-            "right_foot",
-            "tail_base",
-            "tail_middle",
-            "right_wrist"
-        ]
-        )
-    )
-
-
+    # Keypoint, angle and 2D camera definitions live in anipose_keypoints.json
+    # next to this file, so the rig and pose model can change without touching the code.
+    _pose_config = _load_pose_config()
+    keypoint_names = tuple(_pose_config["keypoint_names"])
+    angle_names_and_references = tuple(_pose_config["angles"].items())
+    cameras2d = tuple(_pose_config["cameras_2d"].items())
+    del _pose_config
 
     def __init__(self, csv_path: Path):
         super().__init__()
