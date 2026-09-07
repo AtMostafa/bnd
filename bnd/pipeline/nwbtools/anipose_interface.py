@@ -119,7 +119,11 @@ class AniposeInterface(BaseTemporalAlignmentInterface):
 
         else:
             for camera, keypoints in self.cameras2d:
-                pose_data, conf_scores = self.load_anipose_from_h5(camera) 
+                try:
+                    pose_data, conf_scores = self.load_anipose_from_h5(camera) 
+                except FileNotFoundError:
+                    logger.error(f"camera {camera} not found. skipping.")
+                    continue
                 for idx,keypoint_name in enumerate(self.keypoint_names):
                     if keypoint_name not in keypoints:
                         continue
