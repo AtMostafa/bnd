@@ -259,7 +259,7 @@ def _parse_pose_estimation_series(
             df[col] = pose_est_series.confidence
 
     timestamps = np.arange(pose_est_series.data[:].shape[0])
-    df["timestamps_idx"] = timestamps
+    df["timestamp_idx"] = timestamps
     df["timestamps"] = timestamps / pose_est_series.rate + pose_est_series.starting_time
 
     return df
