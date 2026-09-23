@@ -259,8 +259,8 @@ def _parse_pose_estimation_series(
             df[col] = pose_est_series.confidence
 
     timestamps = np.arange(pose_est_series.data[:].shape[0])
-    timestamps = timestamps / pose_est_series.rate + pose_est_series.starting_time
-    df["timestamps"] = timestamps
+    df["timestamps_idx"] = timestamps
+    df["timestamps"] = timestamps / pose_est_series.rate + pose_est_series.starting_time
 
     return df
 
@@ -631,9 +631,10 @@ class ParsedNWBFile:
             for anipose_key, anipose_value in self.anipose_data.items():
                 # Bin timestamps
                 # TODO: Predefine time units during nwb conversion
-                anipose_value["timestamp_idx"] = np.floor(
-                    anipose_value.timestamps.values[:] / self.bin_size
-                ).astype(int)
+                if "timestamp_idx" not in anipose_value.columns:
+                    anipose_value["timestamp_idx"] = np.floor(
+                        anipose_value.timestamps.values[:] / self.bin_size
+                    ).astype(int)
 
                 # Add columns
                 self.pyaldata_df[anipose_key] = np.nan
@@ -737,26 +738,17 @@ class ParsedNWBFile:
 
         return
 
-    def expand_dim_in_single_bin_trials(self, column_subset="_spikes") -> None:
-        """
-        Expand 1D arrays in length one trials
-
-        Parameters
-        ----------
-        column_subset :
-            String expression to look for in columns to be expanded. Defaults to 'spikes_'
-
-        """
-
+    def expand_dim_in_single_bin_trials(self, column_subset=("_spikes","camera_")) -> None:
         def _expand_dim_in_single_bin_trial(value):
-            if isinstance(value, np.ndarray):
-                return np.expand_dims(value, axis=1)
+            return np.atleast_2d(value) if isinstance(value, np.ndarray) else value
 
-        trial_length_1_df = self.pyaldata_df.query("trial_length == 1")
-        for column in trial_length_1_df.columns:
-            if column_subset in column:
-                trial_length_1_df[column].apply(_expand_dim_in_single_bin_trial)
-
+        trial_length_1_idx = self.pyaldata_df.query("trial_length == 1").index
+        for column in self.pyaldata_df.columns:
+            for good_col in column_subset:
+                if good_col in column:
+                    self.pyaldata_df.loc[trial_length_1_idx, column] = self.pyaldata_df.loc[
+                        trial_length_1_idx, column
+                    ].apply(_expand_dim_in_single_bin_trial)
         return
 
     def drop_empty_states_at_end(self) -> None:
