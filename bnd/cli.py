@@ -1,7 +1,7 @@
 import platform
 import subprocess
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from rich import print
@@ -13,7 +13,6 @@ from .config import (
     _get_package_path,
     _load_config,
     check_config,
-    get_last_session,
     get_repo_url,
     get_version,
     list_dirs,
@@ -23,6 +22,7 @@ from .config import (
 from .data_transfer import download_session, download_session_light, upload_session
 from .display import print_session_tree
 from .pipeline import _check_processing_dependencies
+from .resolve import is_animal, last_session, resolve_sessions
 
 # Create a Typer app
 app = typer.Typer(
@@ -58,111 +58,121 @@ def main(
 
 @app.command()
 def to_pyal(
-    session_name: str = typer.Argument(..., help="Session name to convert"),
+    targets: Annotated[
+        list[str],
+        typer.Argument(help="Animal and/or session names to process. An animal means all its local sessions."),
+    ],
     kilosort_flag: bool = typer.Option(
         True,
         "-k/-K",
         "--kilosort/--dont-kilosort",
-        help="Run kilosort if available (-k) or dont (-K).",
+        help="Kilosort the session first (-k, default) or don't (-K). Skipped if a `_ksort` folder already exists.",
     ),
     custom_map: bool = typer.Option(
         False,
         "-c/-C",
         "--custom-map/--default-map",
-        help="Run conversion with a custom map (-c) or the not (-C)",
+        help="Use the custom channel map `custom_map.json` (-c) or the default map (-C, default).",
     ),
 ) -> None:
     """
-    Convert session data into a pyaldata dataframe and saves it as a .mat
+    Convert sessions into pyaldata dataframes, saved as .mat files.
+    An animal name converts all its local sessions.
 
     \b
-    If no .nwb file is present it will automatically generate one and if a nwb file is present it will skip it. If you want to generate a new one run `bnd to-nwb`
+    If a session has no .nwb file, one is generated first; an existing .nwb file is reused.
+    To regenerate it, run `bnd to-nwb`.
 
     \b
-    If no kilosorted data is available it will not kilosort by default. If you want to kilosort add the flag `-k`
+    Sessions are kilosorted first by default (unless a `_ksort` folder already exists). Use `-K` to skip kilosort.
 
     \b
     Basic usage:
-        `bnd to-pyal M037_2024_01_01_10_00  # Kilosorts data and converts to pyaldata
-        `bnd to-pyal M037_2024_01_01_10_00 -c  # Uses custom mapping
+        `bnd to-pyal M037_2024_01_01_10_00`  # Kilosorts data and converts to pyaldata
+        `bnd to-pyal M037_2024_01_01_10_00 -K`  # Converts without kilosorting
+        `bnd to-pyal M037_2024_01_01_10_00 -c`  # Uses custom mapping
+        `bnd to-pyal M037 M038_2024_01_01_10_00`  # Every local session of M037, plus one session of M038
     """
     _check_processing_dependencies()
     from .pipeline.pyaldata import run_pyaldata_conversion
 
-    # Load config and get session path
     config = _load_config()
-    session_path = config.get_local_session_path(session_name)
-
-    # Check session directory
-    _check_session_directory(session_path)
-
-    # Run pipeline
-    run_pyaldata_conversion(session_path, kilosort_flag, custom_map)
+    for session_name in resolve_sessions(targets, config=config):
+        session_path = config.get_local_session_path(session_name)
+        _check_session_directory(session_path)
+        run_pyaldata_conversion(session_path, kilosort_flag, custom_map)
 
 
 
 @app.command()
 def to_nwb(
-    session_name: str,
+    targets: Annotated[
+        list[str],
+        typer.Argument(help="Animal and/or session names to process. An animal means all its local sessions."),
+    ],
     kilosort_flag: bool = typer.Option(
         True,
         "-k/-K",
         "--kilosort/--dont-kilosort",
-        help="Run kilosort if available (-k) or dont (-K).",
+        help="Kilosort the session first (-k, default) or don't (-K). Skipped if a `_ksort` folder already exists.",
     ),
     custom_map: bool = typer.Option(
         False,
         "-c/-C",
         "--custom-map/--default-map",
-        help="Run conversion with a custom map (-c) or the not (-C)",
+        help="Use the custom channel map `custom_map.json` (-c) or the default map (-C, default).",
     ),
 ) -> None:
     """
-    Convert session data into a nwb file and saves it as a .nwb
+    Convert sessions into .nwb files.
+    An animal name converts all its local sessions. If a .nwb file already exists, you are asked before it is overwritten.
 
     \b
-    If no kilosorted data is available it will not kilosort by default. If you want to kilosort add the flag `-k`
+    Sessions are kilosorted first by default (unless a `_ksort` folder already exists). Use `-K` to skip kilosort.
 
     \b
     Basic usage:
         `bnd to-nwb M037_2024_01_01_10_00`
+        `bnd to-nwb M037_2024_01_01_10_00 -K`  # Converts without kilosorting
         `bnd to-nwb M037_2024_01_01_10_00 -c`  # Use custom channel mapping
+        `bnd to-nwb M037`  # Every local session of M037
     """
     # TODO: Add channel map argument: no-map, default-map, custom-map
     # _check_processing_dependencies()
     from .pipeline.nwb import run_nwb_conversion
 
     config = _load_config()
-    session_path = config.get_local_session_path(session_name)
-
-    # Check session directory
-    _check_session_directory(session_path)
-
-    # Run pipeline
-    run_nwb_conversion(session_path, kilosort_flag, custom_map)
+    for session_name in resolve_sessions(targets, config=config):
+        session_path = config.get_local_session_path(session_name)
+        _check_session_directory(session_path)
+        run_nwb_conversion(session_path, kilosort_flag, custom_map)
 
 
 @app.command()
-def ksort(session_name: str = typer.Argument(help="Session name to kilosort")) -> None:
+def ksort(
+    targets: Annotated[
+        list[str],
+        typer.Argument(help="Animal and/or session names to process. An animal means all its local sessions."),
+    ],
+) -> None:
     """
-    Kilosorts data from a single session.
+    Kilosort the given sessions on all available probes and recordings.
+    An animal name kilosorts all its local sessions. Sessions that already have a `_ksort` folder are skipped.
 
     \b
     Basic usage:
         `bnd ksort M037_2024_01_01_10_00`
+        `bnd ksort M037 M038`  # Every local session of M037 and M038
     """
     # this will throw an error if the dependencies are not available
     _check_processing_dependencies()
     from .pipeline.kilosort import run_kilosort_on_session
 
     config = _load_config()
-    session_path = config.get_local_session_path(session_name)
-
-    # Check session directory
-    _check_session_directory(session_path)
-
-    # Run pipeline
-    run_kilosort_on_session(session_path)
+    for session_name in resolve_sessions(targets, config=config):
+        session_path = config.get_local_session_path(session_name)
+        _check_session_directory(session_path)
+        run_kilosort_on_session(session_path)
 
 
 # ================================== Data Transfer ========================================
@@ -170,36 +180,35 @@ def ksort(session_name: str = typer.Argument(help="Session name to kilosort")) -
 
 @app.command()
 def up(
-    session_or_animal_name: str = typer.Argument(
-        help="Animal or session name: M123 or M123_2000_02_03_14_15"
-    ),
+    targets: Annotated[
+        list[str],
+        typer.Argument(help="Animal and/or session names: M123 or M123_2000_02_03_14_15"),
+    ],
 ):
     """
-    Upload data to the server. If the file exists on the server, it won't be replaced.
+    Upload sessions to the server. Files that already exist on the server are not replaced.
     Every file in the session folder will get uploaded.
-    If animal name give, the last session will get uploaded.
+    An animal name uploads its last local session.
 
     \b
-    Example usage to upload everything of a given session:
-        `bnd up M017_2024_03_12_18_45`
-    Upload everything of the last session:
-        `bnd up M017`
+    Example usage:
+        `bnd up M017_2024_03_12_18_45`  # Upload everything of that session
+        `bnd up M017`  # Upload the last session of M017
+        `bnd up M017 M018`  # Upload the last session of each animal
     """
-    if len(session_or_animal_name) > 4:  # session name
-        upload_session(session_or_animal_name)
-    elif len(session_or_animal_name) == 4:  # animal name
-        config = _load_config()
-        last_session = get_last_session(config.LOCAL_PATH / "raw" / session_or_animal_name)
-        upload_session(last_session)
-    else:
-        print("[red]Input must be either a session or an animal name.")
-        raise typer.Exit(code=1)
+    for session_name in resolve_sessions(targets, pick=last_session):
+        upload_session(session_name)
 
 
 @app.command()
 def dl(
-    session_name: str = typer.Argument(help="Name of session: M123_2000_02_03_14_15"),
-    file_extension: Annotated[str, typer.Argument(help="One file type to download")] = ".*",
+    targets: Annotated[
+        list[str],
+        typer.Argument(help="Animal and/or session names: M123 or M123_2000_02_03_14_15"),
+    ],
+    file_extension: str = typer.Option(
+        ".*", "--ext", "-e", help="One file type to download, e.g. `.mat`."
+    ),
     max_size_MB: float = typer.Option(
         0,
         "--max-size",
@@ -213,23 +222,29 @@ def dl(
     ),
 ):
     """
-    Download data of a given session from the remote server.
-    If session exists locally, only missing files will be downloaded.
-    if session name is not complete (`M123_2025_02_03`), it will try to find a similar session.
+    Download sessions from the remote server.
+    An animal name downloads all its remote sessions.
+    If a session exists locally, only missing files are downloaded.
+    If a session name is incomplete (`M123_2025_02_03`), the first matching session is offered for confirmation.
 
     \b
-    Example usage to download everything:
+    Example usage:
         `bnd dl M017_2024_03_12_18_45 -v` will download everything, including videos
         `bnd dl M017_2024_03_12_18_45` will download everything, except videos
         `bnd dl M017_2024_03_12_18_45 --max-size=50` will download files smaller than 50MB
-        `bnd dl M056_2025_03_01 .mat` will download all the '.mat' files from the matching session
+        `bnd dl M056_2025_03_01 -e .mat` will download all the '.mat' files from the matching session
+        `bnd dl M017 M018` will download every session of both animals, except videos
     """
-    download_session(session_name, file_extension, max_size_MB, do_video)
+    for session_name in resolve_sessions(targets, remote=True, fuzzy=True):
+        download_session(session_name, file_extension, max_size_MB, do_video)
 
 
 @app.command()
 def dl_light(
-    session_name: str = typer.Argument(help="Name of session: M123_2000_02_03_14_15"),
+    targets: Annotated[
+        list[str],
+        typer.Argument(help="Animal and/or session names: M123 or M123_2000_02_03_14_15"),
+    ],
     max_size_MB: float = typer.Option(
         0,
         "--max-size",
@@ -237,17 +252,20 @@ def dl_light(
     ),
 ):
     """
-    Download a session, skipping bulky raw data.
+    Download sessions, skipping bulky raw data.
+    An animal name downloads all its remote sessions.
     Like `dl` but always skips: video files, SpikeGLX data files (`..._g?_...`) except their `*.meta`
     files, anything inside a `..._ksort` folder, and anything inside a `..._camera`/`..._cameras` folder.
-    If session exists locally, only missing files will be downloaded.
+    If a session exists locally, only missing files are downloaded.
+    Incomplete session names are matched like in `dl`.
 
     \b
     Example usage:
         `bnd dl-light M017_2024_03_12_18_45` downloads everything except the bulky raw data
-        `bnd dl-light M056_2025_03_01 .mat` downloads all the '.mat' files from the matching session
+        `bnd dl-light M017` downloads every session of M017
     """
-    download_session_light(session_name, max_size_MB)
+    for session_name in resolve_sessions(targets, remote=True, fuzzy=True):
+        download_session_light(session_name, max_size_MB)
 
 
 # =================================== Listing ==========================================
@@ -255,10 +273,12 @@ def dl_light(
 
 @app.command()
 def ls(
-    animal_name: str = typer.Argument(
-        None,
-        help="Animal name (M123) or session name (M123_2000_02_03_14_15). If omitted, lists every animal.",
-    ),
+    targets: Annotated[
+        Optional[list[str]],
+        typer.Argument(
+            help="Animal names (M123) and/or session names (M123_2000_02_03_14_15). If omitted, lists every animal.",
+        ),
+    ] = None,
     missing: bool = typer.Option(
         False,
         "-m",
@@ -267,44 +287,55 @@ def ls(
     ),
 ):
     """
-    List the sessions available locally.
-    If a session name is given instead, show its contents.
+    List the sessions available locally, for the given animals or for every animal.
+    For each session name given, show that session's files. Animals and sessions can be mixed.
 
     \b
     Example usage:
         `bnd ls` lists every animal and its sessions
-        `bnd ls M170` lists the sessions of M017 only
+        `bnd ls M170` lists the sessions of M170 only
+        `bnd ls M170 M171` lists the sessions of both animals
         `bnd ls M170_2024_03_12_18_45` shows that session's files
         `bnd ls -m` also flags remote ephys sessions missing locally
-        `bnd ls M170 -m` same, for M017 only
+        `bnd ls M170 -m` same, for M170 only
     """
     config = _load_config()
     raw_path = config.LOCAL_PATH / "raw"
 
-    if animal_name is not None and len(animal_name) > 4:  # session name
-        session_path = config.get_local_session_path(animal_name)
-        if not session_path.is_dir():
-            print(f"[red]Session {animal_name} not found in {raw_path}")
+    if targets:
+        animal_names = []
+        for animal in dict.fromkeys(t for t in targets if is_animal(t)):
+            if (raw_path / animal).is_dir():
+                animal_names.append(animal)
+            else:
+                print(f"[red]{animal}: animal not found in {raw_path}. Skipping.")
+        session_targets = [t for t in targets if not is_animal(t)]
+        session_names = []
+        if session_targets:
+            try:
+                session_names = resolve_sessions(session_targets, config=config)
+            except typer.Exit:
+                if not animal_names:
+                    raise
+        if not animal_names and not session_names:
             raise typer.Exit(code=1)
-        
+    else:
+        session_names = []
+        animal_names = sorted(list_dirs(raw_path))
+        if not animal_names:
+            print(f"[yellow]No animals found in {raw_path}")
+            return
+
+    for session_name in session_names:
+        session_path = config.get_local_session_path(session_name)
         print(f"[green]Session path: {session_path}")
         if platform.system() == "Windows":
             subprocess.run(r"dir /b", shell=True, cwd=session_path, check=False)
         else:
             subprocess.run(r"du -sh *", shell=True, cwd=session_path, check=False)
-        return
 
-    if animal_name is not None:
-        animal_path = config.get_local_animal_path(animal_name)
-        if not animal_path.is_dir():
-            print(f"[red]Animal {animal_name} not found in {raw_path}")
-            raise typer.Exit(code=1)
-        animal_names = [animal_path.name]
-    else:
-        animal_names = sorted(list_dirs(raw_path))
-        if not animal_names:
-            print(f"[yellow]No animals found in {raw_path}")
-            return
+    if not animal_names:
+        return
 
     animals_tree_data: dict[str, tuple[int, list[str]]] = {}
     for animal in animal_names:
@@ -329,11 +360,12 @@ def ks(
     ],
 ):
     """
-    Kilosort every not-yet-processed sessions of the given animals/sessions.
-    If animal name is given, only ephys sessions will be included.
+    Kilosort every not-yet-processed session of the given animals/sessions.
+    An animal name expands to its ephys sessions (with a `_g?` gate folder) on the server.
+    Session names given explicitly are always included.
 
     \b
-    A session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file.
+    A session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file on the server.
     For every remaining session: download (no video), convert to pyaldata,
     upload back to the server, then replace the bulky local raw data with
     a light copy (like `dl-light`).
@@ -341,7 +373,7 @@ def ks(
     \b
     Example usage:
         `yes | bnd ks M123 M124` kilosorts all pending sessions of M123 and M124
-        `yes | bnd ks M123_2000_02_03_14_15 M123_2024_01_01_10_00` kilosorts just that session
+        `yes | bnd ks M123_2000_02_03_14_15 M123_2024_01_01_10_00` kilosorts just those sessions
     """
     _check_processing_dependencies()
     from .pipeline.batch import run_kilosort_batch

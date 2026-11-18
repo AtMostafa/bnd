@@ -276,7 +276,7 @@ def run_kilosort_on_session(session_path: Path) -> None:
 
     if not any(session_path.rglob("*.bin")):
         logger.warning(
-            f"No ephys files found. Consider running `bnd dl {session_path.name} -e"
+            f"No ephys files found. Consider running `bnd dl {session_path.name}`"
         )
 
     elif kilosort_output_folders:

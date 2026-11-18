@@ -907,7 +907,9 @@ def run_pyaldata_conversion(
     ----------
     session_path : Path
     kilosort_flag : bool
-        Whether to run kilosort or not. Defaults to True
+        Whether to run kilosort before the nwb conversion (only used if no nwb file exists yet)
+    custom_map : bool
+        Whether to use the custom channel map during the nwb conversion
 
     Returns
     -------
