@@ -5,37 +5,32 @@ import shutil
 import typer
 from rich import print
 
-from ..config import _load_config, missing_ephys_sessions
+from ..config import _load_config
 from ..data_transfer import download_session, download_session_light, upload_session
 from ..display import confirm, print_session_tree
+from ..resolve import ephys_sessions, resolve_sessions
 from .kilosort import needs_kilosort
 from .pyaldata import run_pyaldata_conversion
 
 
 def run_kilosort_batch(targets: list[str]) -> None:
     """
-    Kilosort every not-yet-processed sessions of the given animals/sessions.
-    If animal name is given, only ephys sessions will be included.
+    Kilosort every not-yet-processed session of the given animals/sessions.
+    An animal name expands to its ephys sessions (with a `_g?` gate folder) on the server.
+    Session names given explicitly are always included. Invalid targets are reported and skipped.
 
-    \b
-    A session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file.
+    A session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file on the server.
     For every remaining session: download (no video), convert to pyaldata,
     upload back to the server, then replace the bulky local raw data with
     a light copy (like `dl-light`).
     """
     config = _load_config()
 
-    session_names: list[str] = []
     errors: list[tuple[str, str]] = []
 
-    for target in targets:
-        if len(target) > 4:  # session name
-            session_names.append(target)
-        elif len(target) == 4:  # animal name
-            sessions = missing_ephys_sessions(target, [])
-            session_names.extend(sessions)
-        else:
-            errors.append((target, "not a valid animal or session name"))
+    session_names = resolve_sessions(
+        targets, remote=True, pick=ephys_sessions(config, remote=True), config=config
+    )
 
     pending_sessions = [s for s in session_names if needs_kilosort(config, s)]
 
@@ -44,7 +39,7 @@ def run_kilosort_batch(targets: list[str]) -> None:
     else:
         sessions_by_animal: dict[str, list[str]] = {}
         for session in pending_sessions:
-            sessions_by_animal.setdefault(session[:4], []).append(session)
+            sessions_by_animal.setdefault(config.get_animal_name(session), []).append(session)
 
         animals_tree_data = {
             animal: (len(sessions), sessions) for animal, sessions in sessions_by_animal.items()
@@ -58,13 +53,11 @@ def run_kilosort_batch(targets: list[str]) -> None:
             raise typer.Exit(code=0)
 
         for session in pending_sessions:
-            animal = session[:4]
-            local_session_path = config.LOCAL_PATH / "raw" / animal / session
+            local_session_path = config.get_local_session_path(session)
             print(f"\n[bold cyan]Processing {session}[/]")
             try:
                 download_session(session, ".*", max_size_MB=0, do_video=False)
-                session_path = config.get_local_session_path(session)
-                run_pyaldata_conversion(session_path, kilosort_flag=True, custom_map=True)
+                run_pyaldata_conversion(local_session_path, kilosort_flag=True, custom_map=True)
                 upload_session(session)
                 shutil.rmtree(local_session_path, ignore_errors=True)
                 download_session_light(session, max_size_MB=0)

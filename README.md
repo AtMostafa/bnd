@@ -127,20 +127,23 @@ Show the contents of the config file.
 
 ## Data Transfer
 
-### `bnd up <session_or_animal_name>`
+Every command below accepts one or more targets, each either an animal name (4 characters, e.g. `M017`) or a session name (`M017_2024_03_12_18_45`), mixed freely. What an animal name expands to depends on the command. Invalid targets are reported and skipped.
 
-Upload data from session or animal name to the server. If the file exists on the server, it won't be replaced. Every file in the session folder will get uploaded.
+### `bnd up <targets...>`
+
+Upload data to the server. If the file exists on the server, it won't be replaced. Every file in the session folder will get uploaded. An animal name uploads its **last** local session.
 
 Example usage to upload everything of a given session:
 
 ```shell
 bnd up M017_2024_03_12_18_45
-bnd up M017
+bnd up M017  # last session of M017
+bnd up M017 M018  # last session of each
 ```
 
-### `bnd dl <session>`
+### `bnd dl <targets...>`
 
-Download experimental data from a given session from the remote server.
+Download experimental data from the remote server. An animal name downloads **all** its remote sessions. A partial session name (`M017_2024_03_12`) is matched to a full one after confirmation.
 
 Example usage to download everything:
 
@@ -148,11 +151,13 @@ Example usage to download everything:
 bnd dl M017_2024_03_12_18_45 -v  # will download everything, including videos
 bnd dl M017_2024_03_12_18_45  # will download everything, except videos
 bnd dl M017_2024_03_12_18_45 --max-size=50  # will download files smaller than 50MB
+bnd dl M017_2024_03_12 -e .mat  # only the .mat files of the matching session
+bnd dl M017  # every session of M017
 ```
 
-### `bnd dl-light <session>`
+### `bnd dl-light <targets...>`
 
-Download a session, like `dl`, but always skipping bulky raw data: video files, SpikeGLX
+Download sessions, like `dl`, but always skipping bulky raw data: video files, SpikeGLX
 data files (`..._g?_...`, except their `*.meta`), anything inside a `..._ksort` folder, and
 anything inside a `..._camera`/`..._cameras` folder.
 
@@ -161,14 +166,15 @@ Example usage:
 ```shell
 bnd dl-light M017_2024_03_12_18_45  # downloads everything except the bulky raw data
 bnd dl-light M017_2024_03_12_18_45 --max-size=50  # also skip any remaining file bigger than 50MB
+bnd dl-light M017  # every session of M017
 ```
 
 ## Listing
 
-### `bnd ls [animal_or_session] [-m]`
+### `bnd ls [targets...] [-m]`
 
-List the sessions available locally for one animal or all of them. If a full session name is
-given instead, show that session's file sizes. Pass `-m`/`--missing` to also flag ephys
+List the sessions available locally for the given animals, or all of them. For each full
+session name given, show that session's files (with sizes on Linux/macOS). Pass `-m`/`--missing` to also flag ephys
 sessions (with a SpikeGLX `_g?` gate folder) that exist on the remote server but not locally.
 
 Example usage:
@@ -176,6 +182,7 @@ Example usage:
 ```shell
 bnd ls  # lists every animal and its sessions
 bnd ls M170  # lists the sessions of M170 only
+bnd ls M170 M171  # lists the sessions of both animals
 bnd ls M170_2024_03_12_18_45  # shows that session's files
 bnd ls -m  # also flags remote ephys sessions missing locally
 bnd ls M170 -m  # same, for M170 only
@@ -183,13 +190,15 @@ bnd ls M170 -m  # same, for M170 only
 
 ## Pipeline
 
-### `bnd to-pyal <session>`
+`to-pyal`, `to-nwb` and `ksort` accept one or more animal and/or session names. An animal name processes **all** its local sessions.
+
+### `bnd to-pyal <targets...>`
 
 Convert session data into a pyaldata dataframe and saves it as a .mat
 
 If no .nwb file is present it will automatically generate one and if a nwb file is present it will skip it. If you want to generate a new one run `bnd to-nwb`
 
-If no kilosorted data is available it will not kilosort by default. If you want to kilosort add the flag `-k`
+Sessions are kilosorted first by default (unless a `_ksort` folder already exists). Use `-K` to skip kilosort.
 
 Example usage:
 
@@ -199,11 +208,11 @@ bnd to-pyal M037_2024_01_01_10_00 -K  # converts to pyaldata without kilosorting
 bnd to-pyal M037_2024_01_01_10_00 -c  # Use custom mapping during nwb conversion if custom_map.json is available (see template in repo). -C uses available default mapping
 ```
 
-### `bnd to-nwb <session>`
+### `bnd to-nwb <targets...>`
 
 Convert session data into a nwb file and saves it as a .nwb
 
-If no kilosorted data is available it will not kilosort by default. If you want to kilosort add the flag `-k`
+Sessions are kilosorted first by default (unless a `_ksort` folder already exists). Use `-K` to skip kilosort.
 
 Example usage:
 
@@ -213,21 +222,23 @@ bnd to-nwb M037_2024_01_01_10_00 -K  # converts to nwb without kilosorting (if n
 bnd to-nwb M037_2024_01_01_10_00 -c  # Use custom mapping during conversion if custom_map.json is available (see template in repo). Option `-C` uses available default mapping
 ```
 
-### `bnd ksort <session>`
+### `bnd ksort <targets...>`
 
-Kilosorts data from a single session on all available probes and recordings
+Kilosorts data from the given sessions on all available probes and recordings. Sessions that already have a `_ksort` folder are skipped.
 
 Example usage:
 
 ```shell
 bnd ksort M037_2024_01_01_10_00
+bnd ksort M037 M038  # every local session of M037 and M038
 ```
 
 ### `bnd ks <targets...>`
 
 Batch-kilosort every not-yet-processed session for one or more animals and/or sessions.
-An animal name (`M123`) expands to all of that animal's sessions on the remote server. A
-session is skipped if it already has a `_ksort` folder or a pyaldata/nwb file.
+An animal name (`M123`) expands to all of that animal's ephys sessions (with a `_g?` gate folder) on the remote server.
+Session names given explicitly are always included. A session is skipped if it already has a
+`_ksort` folder or a pyaldata/nwb file on the server.
 
 For every remaining session it downloads the data (no video), runs `to-pyal` with kilosort
 and custom mapping, uploads the results back to the server, then replaces the bulky local
@@ -238,11 +249,6 @@ Example usage:
 
 ```shell
 yes | bnd ks M123 M124  # kilosorts every pending session of M123 and M124
-yes | bnd ks M123_2024_01_01_10_00 M123_2024_01_02_10_00  # kilosorts just that session
+yes | bnd ks M123_2024_01_01_10_00 M123_2024_01_02_10_00  # kilosorts just those sessions
 yes | bnd ks M123  # auto-confirm the upload prompts
 ```
-
-# TODOs:
-
-- Add `AniposeInterface` in nwb conversion
-- Implement Npx2.0 functionality
