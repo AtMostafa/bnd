@@ -172,3 +172,16 @@ def test_is_animal(target, expected):
 
 def test_config_loaded_when_not_given(config):
     assert resolve_sessions("M002") == [B1]
+
+
+def test_supplied_config_is_used_without_env_file(config):
+    """With an explicit config, no global config (~/.bnd/.env) is loaded."""
+    no_env = typer.Exit(code=1)
+    with (
+        patch("bnd.config._load_config", side_effect=no_env),
+        patch("bnd.resolve._load_config", side_effect=no_env),
+    ):
+        assert resolve_sessions(["M001", B1], config=config) == [A1, A2, B1]
+        assert resolve_sessions("M001", remote=True, pick=ephys_sessions(config, True), config=config) == [A2, A3]
+        with patch("bnd.resolve.confirm", return_value=True):
+            assert resolve_sessions("M001_2024_02", fuzzy=True, config=config) == [A2]

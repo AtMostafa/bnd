@@ -242,14 +242,18 @@ def list_dirs(main_path: str | Path) -> list[str]:
     return directories
 
 
-def list_session_datetime(animal_path: str | Path) -> tuple[list[datetime.date], list[str]]:
+def list_session_datetime(
+    animal_path: str | Path, datetime_format: str | None = None
+) -> tuple[list[datetime.date], list[str]]:
     """
     List and sort the datetimes of the sessions in a given path
     animal_path: path to the animal directory containing the session directories: /data/raw/M034/
+    datetime_format: format of the date part of session names. Default: loaded from the config file.
     Return: - list of datetime objects sorted in ascending order,
             - list of session names in the format M034_2024_07_12_10_00
     """
-    datetime_format = _load_config().datetime_pattern
+    if datetime_format is None:
+        datetime_format = _load_config().datetime_pattern
     # List all directories in the given path
     session_list = list_dirs(Path(animal_path))
     session_datetime_list = [

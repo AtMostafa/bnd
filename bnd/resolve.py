@@ -32,7 +32,7 @@ def _animal_sessions(config: Config, remote: bool, animal: str) -> list[str] | N
     animal_path = _raw_root(config, remote) / animal
     if not animal_path.is_dir():
         return None
-    return list_session_datetime(animal_path)[1]
+    return list_session_datetime(animal_path, config.datetime_pattern)[1]
 
 
 # ------------------------------- pickers -------------------------------------
